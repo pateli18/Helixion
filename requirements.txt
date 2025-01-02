@@ -1,3 +1,4 @@
+aiobotocore
 aiofiles
 fastapi
 pydantic-settings

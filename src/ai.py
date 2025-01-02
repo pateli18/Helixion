@@ -9,11 +9,56 @@ from typing import AsyncContextManager, AsyncIterator, Literal, Optional
 
 import aiofiles
 import websockets
+from aiobotocore.client import AioBaseClient
+from aiobotocore.session import AioSession
 from pydantic import BaseModel
 
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+class S3Client(AsyncContextManager["S3Client"]):
+    def __init__(self):
+        self._exit_stack = AsyncExitStack()
+        self._s3_client: Optional[AioBaseClient] = None
+
+    async def __aenter__(self) -> "S3Client":
+        session = AioSession()
+        self._s3_client = await self._exit_stack.enter_async_context(
+            session.create_client(
+                "s3", region_name=settings.aws_default_region
+            )
+        )
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._exit_stack.__aexit__(exc_type, exc_val, exc_tb)
+
+    @staticmethod
+    def bucket_prefix_from_file_url(file_url: str) -> tuple[str, str]:
+        path_splits = file_url.split("://")[1].split("/")
+        bucket = path_splits[0]
+        prefix = "/".join(path_splits[1:])
+        return bucket, prefix
+
+    async def upload_file(
+        self,
+        obj: bytes,
+        filepath: str,
+        content_type: Optional[str] = None,
+    ) -> None:
+        bucket, prefix = self.bucket_prefix_from_file_url(filepath)
+        base_params = {
+            "Bucket": bucket,
+            "Key": prefix,
+            "Body": obj,
+        }
+        if content_type:
+            base_params["ContentType"] = content_type
+        await self._s3_client.put_object(**base_params)  # type: ignore
+        logger.info(f"Successfully uploaded to {bucket=} {prefix=}")
+
 
 SYSTEM_MESSAGE = """
 You are given the following script to follow. If the user asks a question unrelated to the script, politely
@@ -140,6 +185,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self.session_configuration = (
             session_configuration or AiSessionConfiguration.default()
         )
+        self._log_tasks: list[asyncio.Task] = []
+        self._cleanup_started = False
 
     async def __aenter__(self) -> "AiCaller":
         self._ws_client = await self._exit_stack.enter_async_context(
@@ -157,7 +204,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
     async def __aexit__(self, exc_type, exc, tb):
         await self._exit_stack.__aexit__(exc_type, exc, tb)
-        self._log_file = None
+        await self.close()
 
     @property
     def client(self):
@@ -190,7 +237,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             logger.exception("Error writing to log file")
 
     async def send_message(self, message: str):
-        asyncio.create_task(self._log_message(message))
+        task = asyncio.create_task(self._log_message(message))
+        self._log_tasks.append(task)
         await self.client.send(message)
 
     async def truncate_message(self, item_id: str, audio_end_ms: int):
@@ -216,9 +264,25 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         return response
 
     async def close(self):
-        """Close the websocket connection gracefully"""
+        if self._cleanup_started:
+            logger.info("Cleanup already started")
+            return
+        self._cleanup_started = True
+
         if self._ws_client is not None:
             await self._ws_client.close()
+
+        if len(self._log_tasks) > 0:
+            logger.info(f"Flushing {len(self._log_tasks)} log tasks")
+            await asyncio.gather(*self._log_tasks, return_exceptions=True)
+        async with S3Client() as s3_client:
+            async with aiofiles.open(self.log_file, mode="rb") as f:
+                data = await f.read()
+            await s3_client.upload_file(
+                data, f"s3://clinicontact/{self.log_file}", "text/plain"
+            )
+        self._log_tasks.clear()
+        self._log_file = None
 
     async def __aiter__(self) -> AsyncIterator[dict]:
         while True:

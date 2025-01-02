@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     openai_api_key: str
     log_level: str = "INFO"
+    aws_default_region: str = "us-west-2"
 
 
 load_dotenv()

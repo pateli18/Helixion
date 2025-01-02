@@ -2,7 +2,8 @@ import json
 import logging
 from typing import Union
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
+from fastapi.websockets import WebSocketState
 
 from src.ai import AiCaller
 
@@ -10,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class CallRouter:
-    stream_sid: Union[str, None] = None
-    latest_human_timestamp: int = 0
-    last_ai_item_id: Union[str, None] = None
-    mark_queue: list[str] = []
-    response_start_timestamp: Union[int, None] = None
+    stream_sid: Union[str, None]
+    latest_human_timestamp: int
+    last_ai_item_id: Union[str, None]
+    mark_queue: list[str]
+    response_start_timestamp: Union[int, None]
 
     def __init__(self, ai_caller: AiCaller):
         self.stream_sid = None
@@ -54,11 +55,15 @@ class CallRouter:
                         self.mark_queue.append("responsePart")
 
                 if message["type"] == "input_audio_buffer.speech_started":
-                    logger.info("Speech started")
                     if self.last_ai_item_id is not None:
                         await self.handle_speech_started(websocket)
         except Exception:
             logger.exception("Error sending to human")
+        finally:
+            await self.ai_caller.close()
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await websocket.close()
+            logger.info("Closed connection to human")
 
     async def handle_speech_started(self, websocket: WebSocket):
         if (
@@ -103,6 +108,8 @@ class CallRouter:
                 elif data["event"] == "mark":
                     if self.mark_queue:
                         self.mark_queue.pop(0)
-        except WebSocketDisconnect:
-            logger.info("Client disconnected.")
+        except Exception:
+            logger.exception("Error receiving from human")
+        finally:
             await self.ai_caller.close()
+            logger.info("Closed connection to bot")
