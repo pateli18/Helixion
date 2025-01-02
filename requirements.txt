@@ -1,0 +1,6 @@
+aiofiles
+fastapi
+pydantic-settings
+twilio
+uvicorn
+websockets
