@@ -112,7 +112,7 @@ const AudioConnection = (props: {
       peerConnection.current = null;
       sessionId.current = null;
       sessionData.current = [];
-    }, 1000); // 1 second delay
+    }, 5000); // 5 second delay
   };
 
   // Attach event listeners to the data channel when a new one is created
@@ -193,7 +193,7 @@ export const PrimaryPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="space-y-4 px-4 my-16">
-        <div className="text-md text-gray-500">Enter Test details</div>
+        <div className="text-md text-gray-500">Enter Test Details</div>
         <SampleField name="Name" value={name} setValue={setName} />
         <SampleField name="Email" value={email} setValue={setEmail} />
         <SampleField name="Age" value={age} setValue={setAge} />
