@@ -6,9 +6,10 @@ services:
     repo: https://github.com/pateli18/clinicontact
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn src.server:app --host 0.0.0.0 --port 8000"
+    rootDir: backend
     buildFilter:
       paths:
-        - src/**
+        - backend/**
     healthCheckPath: /healthz
     envVars:
       - key: WEB_CONCURRENCY
@@ -25,3 +26,22 @@ services:
         sync: false
       - key: AWS_DEFAULT_REGION
         sync: false
+  - type: web
+    name: clinicontact-frontend
+    runtime: static
+    repo: https://github.com/pateli18/clinicontact
+    rootDir: frontend
+    buildCommand: npm ci --no-audit; npm run build
+    buildFilter:
+      paths:
+        - frontend/**
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_BUILD
+        value: "true"
+      - key: VITE_ENV
+        value: "prod"

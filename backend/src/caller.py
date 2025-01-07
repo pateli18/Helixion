@@ -86,7 +86,7 @@ class CallRouter:
             self.last_ai_item_id = None
             self.response_start_timestamp = None
 
-    async def receive_from_human(self, websocket: WebSocket):
+    async def receive_from_human_call(self, websocket: WebSocket):
         try:
             async for message in websocket.iter_text():
                 data = json.loads(message)
