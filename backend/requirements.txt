@@ -1,6 +1,7 @@
 aiobotocore
 aiofiles
 fastapi
+httpx
 pydantic-settings
 twilio
 uvicorn
