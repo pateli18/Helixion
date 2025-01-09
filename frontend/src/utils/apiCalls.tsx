@@ -13,7 +13,7 @@ export const createSession = async (payload: Record<string, string>) => {
       value: string;
       expires_at: number;
     }>({
-      url: `${baseUrl}/api/v1/create-session`,
+      url: `${baseUrl}/api/v1/browser/create-session`,
       method: "POST",
       body: payload,
     });
@@ -31,7 +31,7 @@ export const storeSession = async (
   let response = null;
   try {
     response = await Ajax.req<Record<string, string>>({
-      url: `${baseUrl}/api/v1/store-session`,
+      url: `${baseUrl}/api/v1/browser/store-session`,
       method: "POST",
       body: {
         session_id: sessionId,
@@ -43,4 +43,36 @@ export const storeSession = async (
     console.error(error);
   }
   return response;
+};
+
+export const outboundCall = async (
+  phoneNumber: string,
+  userInfo: Record<string, string>
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<{ phone_call_id: string }>({
+      url: `${baseUrl}/api/v1/phone/outbound-call`,
+      method: "POST",
+      body: {
+        phone_number: phoneNumber,
+        user_info: userInfo,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const streamSpeaker = async function* (phoneCallId: string) {
+  for await (const payload of Ajax.stream<{
+    timestamp: number;
+    speaker: "User" | "Assistant";
+  }>({
+    url: `${baseUrl}/api/v1/phone/stream-speaker/${phoneCallId}`,
+    method: "GET",
+  })) {
+    yield payload;
+  }
 };

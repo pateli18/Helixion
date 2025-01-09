@@ -1,7 +1,14 @@
+import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { AudioVisualizer } from "@/components/audio/AudioVisualizer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { createSession, storeSession } from "@/utils/apiCalls";
+import {
+  createSession,
+  outboundCall,
+  storeSession,
+  streamSpeaker,
+} from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -11,6 +18,7 @@ const AudioConnection = (props: {
   email: string;
   age: string;
   location: string;
+  audioRef: React.RefObject<HTMLAudioElement>;
 }) => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [settingUpSession, setSettingUpSession] = useState(false);
@@ -21,7 +29,6 @@ const AudioConnection = (props: {
   const sessionData = useRef<Record<string, string>[]>([]);
   const sessionId = useRef<string | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
-  const audioElement = useRef<HTMLAudioElement | null>(null);
 
   const startSession = async () => {
     setSettingUpSession(true);
@@ -44,8 +51,8 @@ const AudioConnection = (props: {
 
     // Set up to play remote audio from the model
     pc.ontrack = (e) => {
-      if (audioElement.current) {
-        audioElement.current.srcObject = e.streams[0];
+      if (props.audioRef.current) {
+        props.audioRef.current.srcObject = e.streams[0];
       }
     };
 
@@ -101,7 +108,12 @@ const AudioConnection = (props: {
         const response = await storeSession(
           sessionId.current,
           sessionData.current,
-          props
+          {
+            name: props.name,
+            email: props.email,
+            age: props.age,
+            location: props.location,
+          }
         );
         if (response !== null) {
           setFinalData(response);
@@ -140,7 +152,6 @@ const AudioConnection = (props: {
 
   return (
     <div>
-      <audio ref={audioElement} autoPlay />
       <Button
         onClick={isSessionActive ? stopSession : startSession}
         variant={isSessionActive ? "destructive" : "default"}
@@ -157,6 +168,61 @@ const AudioConnection = (props: {
           <SampleField name="Email" value={finalData.email} />
           <SampleField name="Age" value={finalData.age} />
           <SampleField name="Location" value={finalData.location} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CallPhoneNumber = (props: {
+  handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
+}) => {
+  const [isCalling, setIsCalling] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
+  const [isValidPhoneNumber, setIsValidPhoneNumber] = useState(false);
+  const validatePhoneNumber = (phoneNumber: string) => {
+    // check starts with + and is 11 digits long and only contains numbers except for the +
+    return (
+      phoneNumber.startsWith("+") &&
+      phoneNumber.slice(1).match(/^\d+$/) !== null
+    );
+  };
+
+  const onClick = async () => {
+    if (phoneNumber) {
+      setIsCalling(true);
+      await props.handleCallPhoneNumber(phoneNumber);
+      setIsCalling(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <Button
+          disabled={phoneNumber !== null && !isValidPhoneNumber && !isCalling}
+          onClick={onClick}
+        >
+          Call Phone Number{" "}
+          {isCalling && <ReloadIcon className="animate-spin ml-2 h-4 w-4" />}
+        </Button>
+        <Input
+          type="tel"
+          placeholder="Enter phone number with country code"
+          value={phoneNumber ?? ""}
+          onChange={(e) => {
+            setPhoneNumber(e.target.value);
+            setIsValidPhoneNumber(validatePhoneNumber(e.target.value));
+          }}
+          className={cn(
+            "max-w-[600px]",
+            !isValidPhoneNumber && "border-red-500"
+          )}
+        />
+      </div>
+      {!isValidPhoneNumber && phoneNumber && (
+        <div className="text-sm text-red-500">
+          Must include the country code and start with +
         </div>
       )}
     </div>
@@ -190,6 +256,34 @@ export const PrimaryPage = () => {
   const [age, setAge] = useState("30");
   const [location, setLocation] = useState("New York, NY");
 
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const speakerIntervals = useRef<
+    { timestamp: number; speaker: "User" | "Assistant" }[]
+  >([]);
+
+  const handleCallPhoneNumber = async (phoneNumber: string) => {
+    const response = await outboundCall(phoneNumber, {
+      name,
+      email,
+      age,
+      location,
+    });
+    if (response === null) {
+      toast.error("Failed to start call, please try again");
+    } else {
+      toast.success("Call started");
+      if (audioRef.current) {
+        audioRef.current.src = `/api/v1/phone/stream-audio/${response.phone_call_id}`;
+        setIsPlaying(true);
+      }
+      for await (const payload of streamSpeaker(response.phone_call_id)) {
+        speakerIntervals.current.push(payload);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="space-y-4 px-4 my-16">
@@ -203,6 +297,22 @@ export const PrimaryPage = () => {
           email={email}
           age={age}
           location={location}
+          audioRef={audioRef}
+        />
+        <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+        <AudioPlayer
+          audioRef={audioRef}
+          analyser={analyser}
+          setAnalyser={setAnalyser}
+          isPlaying={isPlaying}
+          setIsPlaying={setIsPlaying}
+          hide={true}
+        />
+        <AudioVisualizer
+          audioRef={audioRef}
+          analyser={analyser}
+          isPlaying={isPlaying}
+          speakerIntervals={speakerIntervals}
         />
       </div>
     </div>

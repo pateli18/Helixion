@@ -1,8 +1,10 @@
 aiobotocore
 aiofiles
+asyncpg
 fastapi
 httpx
 pydantic-settings
+sqlalchemy[asyncio]
 twilio
 uvicorn
 websockets

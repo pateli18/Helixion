@@ -1,33 +1,27 @@
 import asyncio
+import base64
 import json
 import logging
 import os
-import uuid
 from contextlib import AsyncExitStack
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import (
-    AsyncContextManager,
-    AsyncIterator,
-    Literal,
-    Optional,
-    Union,
-    cast,
-)
+from typing import AsyncContextManager, AsyncIterator, Literal, Optional
 
 import aiofiles
 import httpx
 import websockets
 from aiobotocore.client import AioBaseClient
 from aiobotocore.session import AioSession
-from pydantic import BaseModel, Field, model_serializer
+from pydantic import BaseModel, Field
 
+from src.clinicontact_types import ModelType, SerializedUUID
+from src.db.api import update_phone_call
+from src.db.base import async_session_scope
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gpt-4o-realtime-preview-2024-12-17"
 TIMEOUT = 180
 
 
@@ -142,6 +136,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
     def __init__(
         self,
         user_info: dict,
+        phone_call_id: SerializedUUID,
+        message_queues: dict[str, asyncio.Queue],
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
@@ -149,11 +145,19 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self.session_configuration = AiSessionConfiguration.default(user_info)
         self._log_tasks: list[asyncio.Task] = []
         self._cleanup_started = False
+        self._phone_call_id = phone_call_id
+        self._message_queues = message_queues
+        self._audio_input_buffer_ms: int = (
+            300  # start with default prefix_padding
+        )
+        self._audio_total_buffer_ms: int = 0
+        self._audio_input_buffer: list[tuple[str, int, int]] = []
+        self._user_speaking: bool = False
 
     async def __aenter__(self) -> "AiCaller":
         self._ws_client = await self._exit_stack.enter_async_context(
             websockets.connect(
-                f"wss://api.openai.com/v1/realtime?model={MODEL}",
+                f"wss://api.openai.com/v1/realtime?model={ModelType.realtime.value}",
                 additional_headers={
                     "Authorization": f"Bearer {settings.openai_api_key}",
                     "OpenAI-Beta": "realtime=v1",
@@ -161,7 +165,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             )
         )
         await self.initialize_session()
-        self._log_file = f"logs/{uuid.uuid4()}.log"
+        self._log_file = f"logs/{self._phone_call_id}.log"
         logger.info(f"Initialized session with {self._log_file=}")
         return self
 
@@ -199,10 +203,10 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         except Exception:
             logger.exception("Error writing to log file")
 
-    async def send_message(self, message: str):
+    async def send_message(self, message: str) -> None:
+        await self.client.send(message)
         task = asyncio.create_task(self._log_message(message))
         self._log_tasks.append(task)
-        await self.client.send(message)
 
     async def truncate_message(self, item_id: str, audio_end_ms: int):
         truncate_event = {
@@ -213,6 +217,10 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         }
         await self.send_message(json.dumps(truncate_event))
 
+    def _audio_ms(self, audio_b64: str) -> int:
+        audio_bytes = base64.b64decode(audio_b64)
+        return len(audio_bytes) // 8
+
     async def receive_human_audio(self, audio: str):
         audio_append = {
             "type": "input_audio_buffer.append",
@@ -220,10 +228,55 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         }
         await self.send_message(json.dumps(audio_append))
 
+        # update full message tracker size
+        audio_ms = self._audio_ms(audio)
+        self._audio_input_buffer_ms += audio_ms
+
+        # either dump to streaming queue or input buffer
+        if self._user_speaking:
+            self._audio_total_buffer_ms += audio_ms
+            self._message_queues["audio_queue"].put_nowait(audio)
+        else:
+            self._audio_input_buffer.append(
+                (audio, audio_ms, self._audio_input_buffer_ms)
+            )
+
     async def _message_handler(self, message: websockets.Data) -> dict:
         asyncio.create_task(self._log_message(message))
 
         response = json.loads(message)
+
+        if response["type"] == "input_audio_buffer.speech_started":
+            self._user_speaking = True
+            self._message_queues["speaker_queue"].put_nowait(
+                json.dumps(
+                    {
+                        "timestamp": self._audio_total_buffer_ms,
+                        "speaker": "User",
+                    }
+                )
+            )
+            audio_start_ms = response["audio_start_ms"]
+            for audio, individual_ms, ms in self._audio_input_buffer:
+                if ms >= audio_start_ms:
+                    self._audio_total_buffer_ms += individual_ms
+                    self._message_queues["speaker_queue"].put_nowait(audio)
+            self._audio_input_buffer = []
+        elif response["type"] == "input_audio_buffer.speech_ended":
+            self._user_speaking = False
+            self._message_queues["speaker_queue"].put_nowait(
+                json.dumps(
+                    {
+                        "timestamp": self._audio_total_buffer_ms,
+                        "speaker": "Assistant",
+                    }
+                )
+            )
+        elif response["type"] == "response.audio.delta":
+            audio_ms = self._audio_ms(response["delta"])
+            self._audio_total_buffer_ms += audio_ms
+            self._message_queues["audio_queue"].put_nowait(response["delta"])
+
         return response
 
     async def close(self):
@@ -235,14 +288,24 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         if self._ws_client is not None:
             await self._ws_client.close()
 
+        # close the queues
+        for queue in self._message_queues.values():
+            queue.put_nowait("END")
+
         if len(self._log_tasks) > 0:
             logger.info(f"Flushing {len(self._log_tasks)} log tasks")
             await asyncio.gather(*self._log_tasks, return_exceptions=True)
         async with S3Client() as s3_client:
             async with aiofiles.open(self.log_file, mode="rb") as f:
                 data = await f.read()
-            await s3_client.upload_file(
-                data, f"s3://clinicontact/{self.log_file}", "text/plain"
+            s3_filepath = f"s3://clinicontact/{self.log_file}"
+            await s3_client.upload_file(data, s3_filepath, "text/plain")
+
+        async with async_session_scope() as db:
+            await update_phone_call(
+                self._phone_call_id,
+                s3_filepath,
+                db,
             )
         # delete the file
         os.remove(self.log_file)
@@ -258,180 +321,6 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             except websockets.exceptions.ConnectionClosed:
                 logger.info("Connection closed to openai")
                 return
-
-
-class ModelChatType(str, Enum):
-    developer = "developer"
-    system = "system"
-    user = "user"
-    assistant = "assistant"
-
-
-class ModelChatContentImageDetail(str, Enum):
-    low = "low"
-    auto = "auto"
-    high = "high"
-
-
-class ModelChatContentImage(BaseModel):
-    url: str
-    detail: ModelChatContentImageDetail
-
-    @classmethod
-    def from_b64(
-        cls,
-        b64_image: str,
-        detail: ModelChatContentImageDetail = ModelChatContentImageDetail.auto,
-    ) -> "ModelChatContentImage":
-        return cls(url=f"data:image/png;base64,{b64_image}", detail=detail)
-
-
-class ModelChatContentType(str, Enum):
-    text = "text"
-    image_url = "image_url"
-
-
-SerializedModelChatContent = dict[str, Union[str, dict]]
-
-
-class ModelChatContent(BaseModel):
-    type: ModelChatContentType
-    content: Union[str, ModelChatContentImage]
-
-    @model_serializer
-    def serialize(self) -> SerializedModelChatContent:
-        content_key = self.type.value
-        content_value = (
-            self.content
-            if isinstance(self.content, str)
-            else self.content.model_dump()
-        )
-        return {"type": self.type.value, content_key: content_value}
-
-    @classmethod
-    def from_serialized(
-        cls, data: SerializedModelChatContent
-    ) -> "ModelChatContent":
-        type_ = ModelChatContentType(data["type"])
-        content_key = type_.value
-        content_value = data[content_key]
-        if type_ == ModelChatContentType.image_url:
-            content = ModelChatContentImage(**cast(dict, content_value))
-        else:
-            content = cast(str, content_value)
-        return cls(type=type_, content=content)
-
-
-class ModelChat(BaseModel):
-    role: ModelChatType
-    content: Union[str, list[ModelChatContent]]
-
-    @classmethod
-    def from_b64_image(
-        cls, role: ModelChatType, b64_image: str
-    ) -> "ModelChat":
-        return cls(
-            role=role,
-            content=[
-                ModelChatContent(
-                    type=ModelChatContentType.image_url,
-                    content=ModelChatContentImage.from_b64(b64_image),
-                )
-            ],
-        )
-
-    @classmethod
-    def from_serialized(
-        cls, data: dict[str, Union[str, list[SerializedModelChatContent]]]
-    ) -> "ModelChat":
-        role = ModelChatType(data["role"])
-        if isinstance(data["content"], str):
-            return cls(role=role, content=cast(str, data["content"]))
-        else:
-            content = [
-                ModelChatContent.from_serialized(content_data)
-                for content_data in data["content"]
-            ]
-            return cls(role=role, content=content)
-
-
-class ToolChoiceFunction(BaseModel):
-    name: str
-
-
-class ToolChoiceObject(BaseModel):
-    type: str = "function"
-    function: ToolChoiceFunction
-
-
-ToolChoice = Optional[Union[Literal["auto"], ToolChoiceObject]]
-
-
-class ModelType(str, Enum):
-    gpto1 = "o1-preview"
-    gpt4o = "gpt-4o"
-    claude35 = "claude-3-5-sonnet-20241022"
-
-
-class ModelFunction(BaseModel):
-    name: str
-    description: Optional[str]
-    parameters: Optional[dict]
-
-
-class Tool(BaseModel):
-    type: str = "function"
-    function: ModelFunction
-
-
-class ResponseType(BaseModel):
-    type: Literal["json_object"] = "json_object"
-
-
-class StreamOptions(BaseModel):
-    include_usage: bool
-
-
-class OpenAiChatInput(BaseModel):
-    messages: list[ModelChat]
-    model: ModelType
-    max_completion_tokens: Optional[int] = None
-    n: int = 1
-    temperature: float = 0.0
-    stop: Optional[str] = None
-    tools: Optional[list[Tool]] = None
-    tool_choice: ToolChoice = None
-    stream: bool = False
-    logprobs: bool = False
-    top_logprobs: Optional[int] = None
-    response_format: Optional[ResponseType] = None
-    stream_options: Optional[StreamOptions] = None
-
-    @property
-    def data(self) -> dict:
-        exclusion = set()
-        if self.tools is None:
-            exclusion.add("tools")
-        if self.tool_choice is None:
-            exclusion.add("tool_choice")
-        if self.stream is True:
-            self.stream_options = StreamOptions(include_usage=True)
-        if self.model == ModelType.gpto1:
-            exclusion.add("temperature")
-            exclusion.add("stop")
-        output = self.model_dump(
-            exclude=exclusion,
-        )
-        if self.model == ModelType.claude35:
-            output["max_tokens"] = self.max_completion_tokens or 8192
-            del output["max_completion_tokens"]
-            del output["n"]
-            del output["stop"]
-            del output["logprobs"]
-            del output["top_logprobs"]
-            del output["response_format"]
-            del output["stream_options"]
-        return output
 
 
 async def _core_send_request(

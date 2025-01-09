@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:15
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: clinicontact
+      POSTGRES_DB: clinicontact
+      POSTGRES_PASSWORD: clinicontact
+    volumes:
+      - ../postgres-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinicontact"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+  app:
+    image: clinicontact-webservice:latest
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    command:
+      - python
+      - -m
+      - uvicorn
+      - src.server:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend/src:/app/src
+      - ~/.aws/:/root/.aws:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+    env_file: ../.env
+    environment:
+      POSTGRES_URI: postgres://clinicontact:clinicontact@postgres:5432/clinicontact
+      AWS_PROFILE: clinicontact
+      HOST: "0eb5-107-222-191-66.ngrok-free.app"

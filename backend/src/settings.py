@@ -9,6 +9,21 @@ class Settings(BaseSettings):
     openai_api_key: str
     log_level: str = "INFO"
     aws_default_region: str = "us-west-2"
+    twilio_account_sid: str
+    twilio_auth_token: str
+    postgres_uri: str
+    host: str = "localhost:8000"
+
+    @property
+    def postgres_connection_string(self) -> str:
+        if self.postgres_uri.startswith("postgres://"):
+            return self.postgres_uri.replace(
+                "postgres://", "postgresql+asyncpg://"
+            )
+        else:
+            return self.postgres_uri.replace(
+                "postgresql://", "postgresql+asyncpg://"
+            )
 
 
 load_dotenv()
