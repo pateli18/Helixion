@@ -2,22 +2,11 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Response
 from pydantic import BaseModel
 
-from src.ai import (
-    AiSessionConfiguration,
-    S3Client,
-    format_user_info,
-    send_openai_request,
-)
-from src.clinicontact_types import (
-    ModelChat,
-    ModelChatType,
-    ModelType,
-    OpenAiChatInput,
-    ResponseType,
-)
+from src.ai import AiSessionConfiguration, S3Client
+from src.clinicontact_types import ModelType
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -46,7 +35,9 @@ async def create_session(payload: dict) -> CreateSessionResponse:
             },
             json={
                 "model": ModelType.realtime.value,
-                **AiSessionConfiguration.default(payload).model_dump(),
+                **AiSessionConfiguration.default(
+                    payload, "pcm16"
+                ).model_dump(),
             },
         )
         logger.info(response.text)
@@ -79,39 +70,4 @@ async def store_session(
         request.session_id,
         request.data,
     )
-
-    relevant_lines = "\n----------\n".join(
-        line["transcript"]
-        for line in request.data
-        if line["type"]
-        in [
-            "conversation.item.input_audio_transcription.completed",
-            "response.audio_transcript.done",
-        ]
-    )
-
-    user_info_fmt = format_user_info(request.original_user_info)
-    system_prompt = f"""
-- You are a helpful assistant.
-- The user originally provided the following information:
-{user_info_fmt}
-- You are given the transcript of a call between the user and an assistant confirming the information provided by the user.
-- Based on the transcript, provide the final user information as a JSON object. The keys should be the same as the original user information, but the values may be different depending on the transcript.
-"""
-    chat = OpenAiChatInput(
-        messages=[
-            ModelChat(
-                role=ModelChatType.system,
-                content=system_prompt,
-            ),
-            ModelChat(
-                role=ModelChatType.user,
-                content=relevant_lines,
-            ),
-        ],
-        model=ModelType.gpt4o,
-        response_format=ResponseType(),
-    )
-    response = await send_openai_request(chat.data, "chat/completions")
-    output = json.loads(response["choices"][0]["message"]["content"])
-    return output
+    return Response(status_code=204)

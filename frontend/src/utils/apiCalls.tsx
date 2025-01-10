@@ -76,3 +76,17 @@ export const streamSpeaker = async function* (phoneCallId: string) {
     yield payload;
   }
 };
+
+export const hangUp = async (phoneCallId: string) => {
+  let response = true;
+  try {
+    await Ajax.req({
+      url: `${baseUrl}/api/v1/phone/hang-up/${phoneCallId}`,
+      method: "POST",
+    });
+  } catch (error) {
+    response = false;
+    console.error(error);
+  }
+  return response;
+};

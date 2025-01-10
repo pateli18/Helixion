@@ -90,7 +90,9 @@ class AiSessionConfiguration(BaseModel):
     tools: list[dict] = Field(default_factory=list)
 
     @classmethod
-    def default(cls, user_info: dict) -> "AiSessionConfiguration":
+    def default(
+        cls, user_info: dict, audio_format: AudioFormat
+    ) -> "AiSessionConfiguration":
         user_info_fmt = format_user_info(user_info)
 
         system_message = f"""
@@ -121,8 +123,8 @@ class AiSessionConfiguration(BaseModel):
 
         return cls(
             turn_detection={"type": "server_vad"},
-            input_audio_format="pcm16",
-            output_audio_format="pcm16",
+            input_audio_format=audio_format,
+            output_audio_format=audio_format,
             voice="shimmer",
             instructions=system_message,
             tools=tools,
@@ -138,11 +140,14 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         user_info: dict,
         phone_call_id: SerializedUUID,
         message_queues: dict[str, asyncio.Queue],
+        audio_format: AudioFormat = "g711_ulaw",
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
         self._log_file: Optional[str] = None
-        self.session_configuration = AiSessionConfiguration.default(user_info)
+        self.session_configuration = AiSessionConfiguration.default(
+            user_info, audio_format
+        )
         self._log_tasks: list[asyncio.Task] = []
         self._cleanup_started = False
         self._phone_call_id = phone_call_id
@@ -251,7 +256,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             self._message_queues["speaker_queue"].put_nowait(
                 json.dumps(
                     {
-                        "timestamp": self._audio_total_buffer_ms,
+                        "timestamp": self._audio_total_buffer_ms / 1000,
                         "speaker": "User",
                     }
                 )
@@ -260,14 +265,14 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             for audio, individual_ms, ms in self._audio_input_buffer:
                 if ms >= audio_start_ms:
                     self._audio_total_buffer_ms += individual_ms
-                    self._message_queues["speaker_queue"].put_nowait(audio)
+                    self._message_queues["audio_queue"].put_nowait(audio)
             self._audio_input_buffer = []
-        elif response["type"] == "input_audio_buffer.speech_ended":
+        elif response["type"] == "input_audio_buffer.speech_stopped":
             self._user_speaking = False
             self._message_queues["speaker_queue"].put_nowait(
                 json.dumps(
                     {
-                        "timestamp": self._audio_total_buffer_ms,
+                        "timestamp": self._audio_total_buffer_ms / 1000,
                         "speaker": "Assistant",
                     }
                 )

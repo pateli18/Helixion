@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   createSession,
+  hangUp,
   outboundCall,
   storeSession,
   streamSpeaker,
@@ -14,18 +15,12 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const AudioConnection = (props: {
-  name: string;
-  email: string;
-  age: string;
-  location: string;
+  userInfo: Record<string, string>;
   audioRef: React.RefObject<HTMLAudioElement>;
 }) => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [settingUpSession, setSettingUpSession] = useState(false);
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
-  const [finalData, setFinalData] = useState<Record<string, string> | null>(
-    null
-  );
   const sessionData = useRef<Record<string, string>[]>([]);
   const sessionId = useRef<string | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
@@ -33,12 +28,7 @@ const AudioConnection = (props: {
   const startSession = async () => {
     setSettingUpSession(true);
     // Get an ephemeral key from the Fastify server
-    const tokenResponse = await createSession({
-      name: props.name,
-      email: props.email,
-      age: props.age,
-      location: props.location,
-    });
+    const tokenResponse = await createSession(props.userInfo);
     if (!tokenResponse) {
       setSettingUpSession(false);
       toast.error("Failed to start call, please try again");
@@ -105,19 +95,11 @@ const AudioConnection = (props: {
       }
 
       if (sessionId.current && sessionData.current.length > 0) {
-        const response = await storeSession(
+        await storeSession(
           sessionId.current,
           sessionData.current,
-          {
-            name: props.name,
-            email: props.email,
-            age: props.age,
-            location: props.location,
-          }
+          props.userInfo
         );
-        if (response !== null) {
-          setFinalData(response);
-        }
       }
 
       setDataChannel(null);
@@ -151,25 +133,16 @@ const AudioConnection = (props: {
   }, [dataChannel]);
 
   return (
-    <div>
+    <div className="flex justify-end">
       <Button
         onClick={isSessionActive ? stopSession : startSession}
         variant={isSessionActive ? "destructive" : "default"}
       >
-        {isSessionActive ? "Hang Up" : "Call Me"}{" "}
+        {isSessionActive ? "Hang Up" : "Test Call"}
         {settingUpSession && (
           <ReloadIcon className="animate-spin ml-2 h-4 w-4" />
         )}
       </Button>
-      {finalData && !settingUpSession && !isSessionActive && (
-        <div className="mt-4 space-y-1">
-          <div className="text-md text-gray-500">Finalized Details</div>
-          <SampleField name="Name" value={finalData.name} />
-          <SampleField name="Email" value={finalData.email} />
-          <SampleField name="Age" value={finalData.age} />
-          <SampleField name="Location" value={finalData.location} />
-        </div>
-      )}
     </div>
   );
 };
@@ -255,7 +228,7 @@ export const PrimaryPage = () => {
   const [email, setEmail] = useState("joe_smith@gmail.com");
   const [age, setAge] = useState("30");
   const [location, setLocation] = useState("New York, NY");
-
+  const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -273,33 +246,64 @@ export const PrimaryPage = () => {
     if (response === null) {
       toast.error("Failed to start call, please try again");
     } else {
-      toast.success("Call started");
+      setPhoneCallId(response.phone_call_id);
+      setIsPlaying(true);
       if (audioRef.current) {
         audioRef.current.src = `/api/v1/phone/stream-audio/${response.phone_call_id}`;
-        setIsPlaying(true);
       }
-      for await (const payload of streamSpeaker(response.phone_call_id)) {
-        speakerIntervals.current.push(payload);
-      }
+      // stream speaker intervals in the background
+      (async () => {
+        try {
+          for await (const payload of streamSpeaker(response.phone_call_id)) {
+            speakerIntervals.current.push(payload);
+            console.log(speakerIntervals.current);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+        setIsPlaying(false);
+        setPhoneCallId(null);
+        speakerIntervals.current = [];
+      })();
+    }
+  };
+
+  const handleCallHangUp = async (phoneCallId: string) => {
+    const response = await hangUp(phoneCallId);
+    if (response === false) {
+      toast.error("Failed to hang up call, please try again");
+    } else {
+      toast.success("Hanging up call...");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="space-y-4 px-4 my-16">
+        {!isPlaying && (
+          <AudioConnection
+            userInfo={{ name, email, age, location }}
+            audioRef={audioRef}
+          />
+        )}
         <div className="text-md text-gray-500">Enter Test Details</div>
         <SampleField name="Name" value={name} setValue={setName} />
         <SampleField name="Email" value={email} setValue={setEmail} />
         <SampleField name="Age" value={age} setValue={setAge} />
         <SampleField name="Location" value={location} setValue={setLocation} />
-        <AudioConnection
-          name={name}
-          email={email}
-          age={age}
-          location={location}
-          audioRef={audioRef}
-        />
-        <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+        {isPlaying && phoneCallId ? (
+          <div className="space-y-2">
+            <div className="text-md text-gray-500">Call in progress...</div>
+            <Button
+              onClick={() => handleCallHangUp(phoneCallId)}
+              variant="destructive"
+            >
+              Hang Up
+            </Button>
+          </div>
+        ) : (
+          <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+        )}
         <AudioPlayer
           audioRef={audioRef}
           analyser={analyser}

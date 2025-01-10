@@ -7,12 +7,11 @@ import wave
 from typing import AsyncGenerator, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.rest import Client
-from twilio.twiml.voice_response import Connect, VoiceResponse
 
 from src.ai import AiCaller
 from src.caller import CallRouter
@@ -32,15 +31,6 @@ router = APIRouter(
     include_in_schema=False,
     responses={404: {"description": "Not found"}},
 )
-
-
-@router.post("/incoming-call")
-async def handle_incoming_call(request: Request):
-    response = VoiceResponse()
-    connect = Connect()
-    connect.stream(url=f"wss://{settings.host}/media-stream")
-    response.append(connect)
-    return HTMLResponse(content=str(response), media_type="application/xml")
 
 
 class OutboundCallRequest(BaseModel):
@@ -111,6 +101,7 @@ async def stream_audio(
     phone_call = await get_phone_call(phone_call_id, db)
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
+    logger.info(f"Streaming audio for phone call {phone_call_id}")
 
     async def audio_stream(phone_call_id: SerializedUUID):
         # Create WAV header using wave module
@@ -124,14 +115,20 @@ async def stream_audio(
         # Send the header first
         yield wav_buffer.getvalue()
 
+        audio_buffer = bytearray()
         audio_queue = call_messages[phone_call_id]["audio_queue"]
         while True:
             event_data = await audio_queue.get()
             if event_data == "END":
+                yield bytes(audio_buffer)
                 break
             pcm_data = base64.b64decode(event_data)
             pcm_16bit = audioop.ulaw2lin(pcm_data, 2)
-            yield pcm_16bit
+            audio_buffer.extend(pcm_16bit)
+
+            if len(audio_buffer) > 8000:
+                yield bytes(audio_buffer)
+                audio_buffer = bytearray()
 
     return StreamingResponse(
         audio_stream(phone_call_id), media_type="audio/wav"
@@ -155,8 +152,24 @@ async def stream_speaker(
             event_data = await speaker_queue.get()
             if event_data == "END":
                 break
-            yield event_data
+            yield event_data + "\n"
 
     return StreamingResponse(
-        speaker_stream(phone_call_id), media_type="application/json"
+        speaker_stream(phone_call_id), media_type="application/x-ndjson"
     )
+
+
+@router.post("/hang-up/{phone_call_id}", status_code=204)
+async def hang_up(
+    phone_call_id: SerializedUUID,
+    db: async_scoped_session = Depends(get_session),
+):
+    phone_call = await get_phone_call(phone_call_id, db)
+    if phone_call is None:
+        raise HTTPException(status_code=404, detail="Phone call not found")
+    if phone_call.call_data is not None:
+        raise HTTPException(status_code=400, detail="Phone call already ended")
+    twilio_client.calls(cast(str, phone_call.call_sid)).update(
+        status="completed"
+    )
+    return Response(status_code=204)

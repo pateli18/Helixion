@@ -81,7 +81,6 @@ export const AudioVisualizer = (props: {
 
     const drawVisual = () => {
       if (!ctx) return;
-      console.log("drawing visual");
       animationFrameId.current = requestAnimationFrame(drawVisual);
 
       props.analyser!.getByteFrequencyData(dataArray);

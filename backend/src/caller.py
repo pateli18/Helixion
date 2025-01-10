@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Union
 
+import websockets
 from fastapi import WebSocket
 from fastapi.websockets import WebSocketState
 
@@ -28,6 +29,10 @@ class CallRouter:
     async def send_to_human(self, websocket: WebSocket):
         try:
             async for message in self.ai_caller:
+                if message["type"] == "response.function_call_arguments.done":
+                    if message["name"] == "hang_up":
+                        break
+
                 if message["type"] == "response.audio.delta":
                     audio_delta = {
                         "event": "media",
@@ -108,6 +113,8 @@ class CallRouter:
                 elif data["event"] == "mark":
                     if self.mark_queue:
                         self.mark_queue.pop(0)
+        except websockets.exceptions.ConnectionClosedOK:
+            logger.info("Connection closed")
         except Exception:
             logger.exception("Error receiving from human")
         finally:
