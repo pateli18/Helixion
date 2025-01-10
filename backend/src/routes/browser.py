@@ -50,7 +50,7 @@ async def _upload_session_data(session_id: str, data: list[dict]):
     async with S3Client() as s3_client:
         await s3_client.upload_file(
             json.dumps(data).encode("utf-8"),
-            f"s3://clinicontact/sessions/{session_id}.json",
+            f"s3://clinicontact/browser/sessions/{session_id}.json",
             "application/json",
         )
 
@@ -61,7 +61,7 @@ class StoreSessionRequest(BaseModel):
     original_user_info: dict
 
 
-@router.post("/api/v1/store-session")
+@router.post("/store-session")
 async def store_session(
     request: StoreSessionRequest, background_tasks: BackgroundTasks
 ):

@@ -82,7 +82,7 @@ const AudioConnection = (props: {
   };
 
   // Stop current session, clean up peer connection and data channel
-  const stopSession = () => {
+  const stopSession = (timeout: number) => {
     setIsSessionActive(false);
 
     // Allow time for final events to flow through
@@ -106,7 +106,7 @@ const AudioConnection = (props: {
       peerConnection.current = null;
       sessionId.current = null;
       sessionData.current = [];
-    }, 5000); // 5 second delay
+    }, timeout);
   };
 
   // Attach event listeners to the data channel when a new one is created
@@ -120,7 +120,7 @@ const AudioConnection = (props: {
           event.type === "response.function_call_arguments.done" &&
           event.name === "hang_up"
         ) {
-          stopSession();
+          stopSession(10000);
         }
       });
 
@@ -135,7 +135,13 @@ const AudioConnection = (props: {
   return (
     <div className="flex justify-end">
       <Button
-        onClick={isSessionActive ? stopSession : startSession}
+        onClick={() => {
+          if (isSessionActive) {
+            stopSession(0);
+          } else {
+            startSession();
+          }
+        }}
         variant={isSessionActive ? "destructive" : "default"}
       >
         {isSessionActive ? "Hang Up" : "Test Call"}
@@ -280,7 +286,7 @@ export const PrimaryPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="space-y-4 px-4 my-16">
-        {!isPlaying && (
+        {phoneCallId === null && (
           <AudioConnection
             userInfo={{ name, email, age, location }}
             audioRef={audioRef}
@@ -291,7 +297,7 @@ export const PrimaryPage = () => {
         <SampleField name="Email" value={email} setValue={setEmail} />
         <SampleField name="Age" value={age} setValue={setAge} />
         <SampleField name="Location" value={location} setValue={setLocation} />
-        {isPlaying && phoneCallId ? (
+        {isPlaying && phoneCallId && (
           <div className="space-y-2">
             <div className="text-md text-gray-500">Call in progress...</div>
             <Button
@@ -301,7 +307,8 @@ export const PrimaryPage = () => {
               Hang Up
             </Button>
           </div>
-        ) : (
+        )}
+        {!isPlaying && (
           <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
         )}
         <AudioPlayer
