@@ -308,7 +308,7 @@ export const PrimaryPage = () => {
             </Button>
           </div>
         )}
-        {!isPlaying && (
+        {/* {!isPlaying && (
           <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
         )}
         <AudioPlayer
@@ -324,7 +324,7 @@ export const PrimaryPage = () => {
           analyser={analyser}
           isPlaying={isPlaying}
           speakerIntervals={speakerIntervals}
-        />
+        /> */}
       </div>
     </div>
   );
