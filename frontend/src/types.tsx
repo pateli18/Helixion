@@ -24,3 +24,8 @@ export type SpeakerSegment = {
   transcript: string;
   item_id: string;
 };
+
+export type BarHeight = {
+  height: number;
+  speaker: "User" | "Assistant";
+};

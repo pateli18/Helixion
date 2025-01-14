@@ -1,4 +1,4 @@
-import { SpeakerSegment } from "@/types";
+import { BarHeight, SpeakerSegment } from "@/types";
 import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
@@ -9,17 +9,41 @@ const speakerColors = {
   Assistant: "#16A34A",
 };
 
+const calculatedBars = (props: {
+  canvas: HTMLCanvasElement;
+  canvasCtx: CanvasRenderingContext2D;
+  barHeights: BarHeight[];
+}) => {
+  const barCount = props.barHeights.length;
+  const barWidth = (props.canvas.width - (barCount - 1) * 2) / barCount; // 2px gap between bars
+  const barGap = 2;
+
+  const bars = props.barHeights.map((barHeight, i) => {
+    const actualHeight = barHeight.height * props.canvas.height;
+    const y = (props.canvas.height - actualHeight) / 2;
+    const x = i * (barWidth + barGap);
+    return {
+      speaker: barHeight.speaker,
+      x,
+      y,
+      width: barWidth,
+      height: actualHeight,
+    };
+  });
+  return bars;
+};
+
 export const AudioPlayer = (props: {
   audioUrl: string;
   audioRef: MutableRefObject<HTMLAudioElement | null>;
   speakerSegments: SpeakerSegment[];
+  barHeights: BarHeight[];
   currentSegment: MutableRefObject<SpeakerSegment | null>;
+  totalDuration: number;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number>();
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const getCurrentSegment = (time: number) => {
@@ -53,91 +77,51 @@ export const AudioPlayer = (props: {
 
   const handleSkipForward = () => {
     if (!props.audioRef.current) return;
-    props.audioRef.current.currentTime = Math.min(duration, currentTime + 5);
+    props.audioRef.current.currentTime = Math.min(
+      props.totalDuration,
+      currentTime + 5
+    );
   };
 
   useEffect(() => {
     if (!props.audioRef.current || !canvasRef.current) return;
 
-    const audio = props.audioRef.current;
-
-    const handleDurationChange = () => {
-      setDuration(audio.duration);
-    };
-
-    audio.addEventListener("loadedmetadata", handleDurationChange);
-    audio.addEventListener("play", () => setIsPlaying(true));
-    audio.addEventListener("pause", () => setIsPlaying(false));
-
-    const audioContext = new AudioContext();
-    const analyser = audioContext.createAnalyser();
-    analyserRef.current = analyser;
-
-    analyser.fftSize = 256;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    const source = audioContext.createMediaElementSource(audio);
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
+    props.audioRef.current.addEventListener("play", () => setIsPlaying(true));
+    props.audioRef.current.addEventListener("pause", () => setIsPlaying(false));
 
     const canvas = canvasRef.current;
     const canvasCtx = canvas.getContext("2d")!;
 
+    const bars = calculatedBars({
+      canvas,
+      canvasCtx,
+      barHeights: props.barHeights,
+    });
+
     const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      setCurrentTime(props.audioRef.current?.currentTime ?? 0);
     };
-    audio.addEventListener("timeupdate", handleTimeUpdate);
+    props.audioRef.current.addEventListener("timeupdate", handleTimeUpdate);
 
     const draw = () => {
       animationRef.current = requestAnimationFrame(draw);
+      getCurrentSegment(props.audioRef.current?.currentTime ?? 0);
 
-      analyser.getByteFrequencyData(dataArray);
+      // Clear the canvas before redrawing
+      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-      canvasCtx.fillStyle = "rgb(20, 20, 20)";
-      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+      // Redraw all bars
+      bars.forEach((bar) => {
+        canvasCtx.fillStyle = speakerColors[bar.speaker];
+        canvasCtx.fillRect(bar.x, bar.y, bar.width, bar.height);
+      });
 
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let x = 0;
-
-      getCurrentSegment(currentTime);
-
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * canvas.height;
-
-        const barX = x;
-        const barY = canvas.height - barHeight;
-        const radius = (barWidth - 1) / 2;
-
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(barX + radius, barY);
-        canvasCtx.arcTo(
-          barX + barWidth - 1,
-          barY,
-          barX + barWidth - 1,
-          barY + barHeight,
-          radius
-        );
-        canvasCtx.arcTo(
-          barX + barWidth - 1,
-          barY + barHeight,
-          barX,
-          barY + barHeight,
-          radius
-        );
-        canvasCtx.arcTo(barX, barY + barHeight, barX, barY, radius);
-        canvasCtx.arcTo(barX, barY, barX + barWidth - 1, barY, radius);
-        canvasCtx.closePath();
-
-        canvasCtx.fillStyle =
-          speakerColors[props.currentSegment.current?.speaker ?? "User"];
-        canvasCtx.fill();
-
-        x += barWidth;
-      }
-
-      if (audio && audio.duration) {
-        const playheadX = (currentTime / audio.duration) * canvas.width;
+      // Draw playhead
+      if (props.audioRef.current && props.audioRef.current.duration) {
+        const playheadX =
+          (props.audioRef.current.currentTime /
+            props.audioRef.current.duration) *
+          canvas.width;
         canvasCtx.beginPath();
         canvasCtx.moveTo(playheadX, 0);
         canvasCtx.lineTo(playheadX, canvas.height);
@@ -153,27 +137,29 @@ export const AudioPlayer = (props: {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("loadedmetadata", handleDurationChange);
-      audioContext.close();
+      props.audioRef.current?.removeEventListener(
+        "timeupdate",
+        handleTimeUpdate
+      );
     };
   }, []);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!props.audioRef.current || !canvasRef.current) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const clickPosition = x / rect.width;
 
-    props.audioRef.current.currentTime = clickPosition * duration;
+    props.audioRef.current.currentTime = clickPosition * props.totalDuration;
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4 space-y-4">
       <canvas
         ref={canvasRef}
-        className="w-full h-48 bg-gray-900 rounded-lg cursor-pointer"
+        className="w-full h-48 rounded-lg cursor-pointer"
         width={800}
         height={200}
         onClick={handleCanvasClick}
@@ -182,7 +168,7 @@ export const AudioPlayer = (props: {
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm text-gray-500">
           <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(duration)}</span>
+          <span>{formatTime(props.totalDuration)}</span>
         </div>
 
         <div className="flex items-center justify-center space-x-2">

@@ -1,4 +1,4 @@
-import { PhoneCallMetadata, SpeakerSegment } from "@/types";
+import { BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
 import Ajax from "./Ajax";
 
 export let baseUrl = "";
@@ -108,7 +108,11 @@ export const getCallHistory = async () => {
 export const getAudioTranscript = async (phoneCallId: string) => {
   let response = null;
   try {
-    response = await Ajax.req<SpeakerSegment[]>({
+    response = await Ajax.req<{
+      speaker_segments: SpeakerSegment[];
+      bar_heights: BarHeight[];
+      total_duration: number;
+    }>({
       url: `${baseUrl}/api/v1/phone/audio-transcript/${phoneCallId}`,
       method: "GET",
     });

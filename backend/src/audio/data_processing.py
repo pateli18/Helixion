@@ -2,7 +2,9 @@ import base64
 import json
 import logging
 
-from src.clinicontact_types import Speaker, SpeakerSegment
+import numpy as np
+
+from src.clinicontact_types import BarHeight, Speaker, SpeakerSegment
 
 logger = logging.getLogger(__name__)
 
@@ -107,3 +109,48 @@ def process_audio_data(
                 input_buffer_data.append((decoded_data, input_data_ms))
 
     return speaker_segments, audio_data
+
+
+def calculate_bar_heights(
+    pcm_data: bytes, num_bars: int, speaker_segments: list[SpeakerSegment]
+) -> list[BarHeight]:
+    # Convert bytes to numpy array of 16-bit integers
+    samples = np.frombuffer(pcm_data, dtype=np.int16)
+
+    # Reshape samples into num_bars segments
+    samples_per_bar = len(samples) // num_bars
+    segments = samples[: samples_per_bar * num_bars].reshape(
+        (num_bars, samples_per_bar)
+    )
+
+    # Calculate RMS for each segment using numpy operations
+    rms = np.sqrt(np.mean(segments.astype(np.float32) ** 2, axis=1))
+
+    # Normalize to 0-1 range using 90% of max value instead of fixed 16-bit maximum
+    max_value = np.max(rms)
+    normalized_heights = rms / (max_value * 1.3) if max_value > 0 else rms
+
+    # Calculate timestamp for each bar using numpy
+    samples_per_ms = 8
+    ms_per_bar = samples_per_bar / samples_per_ms
+    bar_timestamps = np.arange(num_bars) * ms_per_bar / 1000
+
+    # Create arrays of segment timestamps and speakers
+    segment_timestamps = np.array(
+        [segment.timestamp for segment in speaker_segments]
+    )
+    segment_speakers = np.array(
+        [segment.speaker.value for segment in speaker_segments]
+    )
+
+    # Find the corresponding speaker for each bar using numpy searchsorted
+    speaker_indices = (
+        np.searchsorted(segment_timestamps, bar_timestamps, side="right") - 1
+    )
+    bar_speakers = segment_speakers[speaker_indices]
+
+    assert len(normalized_heights) == len(bar_speakers)
+    return [
+        BarHeight(height=height, speaker=speaker)
+        for height, speaker in zip(normalized_heights, bar_speakers)
+    ]

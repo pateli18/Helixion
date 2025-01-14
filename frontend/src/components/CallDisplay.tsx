@@ -1,4 +1,4 @@
-import { PhoneCallMetadata, SpeakerSegment } from "@/types";
+import { BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
 import { Sheet, SheetContent } from "./ui/sheet";
 import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
@@ -13,7 +13,11 @@ export const CallDisplay = (props: {
 }) => {
   const [open, setOpen] = useState(false);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
-  const [audioTranscript, setAudioTranscript] = useState<SpeakerSegment[]>([]);
+  const [audioTranscript, setAudioTranscript] = useState<{
+    speaker_segments: SpeakerSegment[];
+    bar_heights: BarHeight[];
+    total_duration: number;
+  }>({ speaker_segments: [], bar_heights: [], total_duration: 0 });
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentSegment = useRef<SpeakerSegment | null>(null);
   useEffect(() => {
@@ -45,16 +49,18 @@ export const CallDisplay = (props: {
           <LoadingView text="Loading call..." />
         ) : (
           <div>
-            {audioTranscript.length > 0 && props.call && (
+            {audioTranscript.speaker_segments.length > 0 && props.call && (
               <AudioPlayer
                 audioUrl={`/api/v1/phone/play-audio/${props.call.id}`}
                 audioRef={audioRef}
                 currentSegment={currentSegment}
-                speakerSegments={audioTranscript}
+                speakerSegments={audioTranscript.speaker_segments}
+                barHeights={audioTranscript.bar_heights}
+                totalDuration={audioTranscript.total_duration}
               />
             )}
             <AudioTranscriptDisplay
-              segments={audioTranscript}
+              segments={audioTranscript.speaker_segments}
               audioRef={audioRef}
               currentSegment={currentSegment}
             />

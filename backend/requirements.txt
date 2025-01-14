@@ -4,6 +4,7 @@ asyncpg
 cachetools
 fastapi
 httpx
+numpy
 pydantic-settings
 sqlalchemy[asyncio]
 twilio

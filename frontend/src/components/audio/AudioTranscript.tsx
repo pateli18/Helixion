@@ -30,11 +30,7 @@ const SegmentDisplay = (props: {
       >
         [{formatTime(props.segment.timestamp)}]
       </Button>
-      <Badge
-        variant={props.segment.speaker === "User" ? "default" : "secondary"}
-      >
-        {props.segment.speaker}
-      </Badge>
+      <Badge variant="secondary">{props.segment.speaker}</Badge>
       <div className="whitespace-pre-wrap text-sm">
         {props.segment.transcript}
       </div>

@@ -219,3 +219,8 @@ class SpeakerSegment(BaseModel):
     speaker: Speaker
     transcript: str
     item_id: str
+
+
+class BarHeight(BaseModel):
+    height: float
+    speaker: Speaker

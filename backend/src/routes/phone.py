@@ -24,10 +24,11 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
 from src.ai import AiCaller
-from src.audio.data_processing import process_audio_data
+from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
 from src.caller import CallRouter
 from src.clinicontact_types import (
+    BarHeight,
     PhoneCallMetadata,
     SerializedUUID,
     SpeakerSegment,
@@ -46,7 +47,10 @@ call_messages: dict[SerializedUUID, dict[str, asyncio.Queue[str]]] = {}
 twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
 twilio_request_validator = RequestValidator(settings.twilio_auth_token)
 audio_cache_lock = asyncio.Lock()
-audio_cache: LRUCache[SerializedUUID, bytearray] = LRUCache(maxsize=50)
+audio_cache: LRUCache[
+    SerializedUUID,
+    tuple[list[SpeakerSegment], bytes, list[BarHeight]],
+] = LRUCache(maxsize=50)
 
 logger = logging.getLogger(__name__)
 
@@ -240,61 +244,110 @@ async def get_call_history(
     return [convert_phone_call_model(phone_call) for phone_call in phone_calls]
 
 
+async def _process_audio_data(
+    phone_call_id: SerializedUUID,
+    db: async_scoped_session,
+) -> tuple[list[SpeakerSegment], bytes, list[BarHeight]]:
+    data = audio_cache.get(phone_call_id)
+    if data is None:
+        phone_call = await get_phone_call(phone_call_id, db)
+        if phone_call is None:
+            raise HTTPException(status_code=404, detail="Phone call not found")
+        async with S3Client() as s3:
+            audio_data_raw, _, _ = await s3.download_file(
+                cast(str, phone_call.call_data)
+            )
+        speaker_segments, audio_data = process_audio_data(audio_data_raw)
+        pcm_data = audioop.ulaw2lin(audio_data, 2)
+        bar_heights = calculate_bar_heights(pcm_data, 50, speaker_segments)
+        async with audio_cache_lock:
+            audio_cache[phone_call_id] = (
+                speaker_segments,
+                pcm_data,
+                bar_heights,
+            )
+    else:
+        speaker_segments, pcm_data, bar_heights = data
+    return speaker_segments, pcm_data, bar_heights
+
+
+class AudioTranscriptResponse(BaseModel):
+    speaker_segments: list[SpeakerSegment]
+    bar_heights: list[BarHeight]
+    total_duration: float
+
+
 @router.get(
-    "/audio-transcript/{phone_call_id}", response_model=list[SpeakerSegment]
+    "/audio-transcript/{phone_call_id}", response_model=AudioTranscriptResponse
 )
 async def get_audio_transcript(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
 ):
-    phone_call = await get_phone_call(phone_call_id, db)
-    if phone_call is None:
-        raise HTTPException(status_code=404, detail="Phone call not found")
-    async with S3Client() as s3:
-        audio_data_raw, _, _ = await s3.download_file(
-            cast(str, phone_call.call_data)
-        )
-    speaker_segments, audio_data = process_audio_data(audio_data_raw)
-    async with audio_cache_lock:
-        audio_cache[phone_call_id] = audio_data
-    return speaker_segments
+    speaker_segments, pcm_data, bar_heights = await _process_audio_data(
+        phone_call_id, db
+    )
+    return AudioTranscriptResponse(
+        speaker_segments=speaker_segments,
+        bar_heights=bar_heights,
+        total_duration=len(pcm_data) / 2 / 8000,
+    )
 
 
 @router.get("/play-audio/{phone_call_id}")
 async def play_audio(
     phone_call_id: SerializedUUID,
+    request: Request,
     db: async_scoped_session = Depends(get_session),
 ):
-    # check if audio data is in cache
-    audio_data = audio_cache.get(phone_call_id)
-    if audio_data is None:
-        phone_call = await get_phone_call(phone_call_id, db)
-        if phone_call is None:
-            raise HTTPException(status_code=404, detail="Phone call not found")
-        logger.info(f"Cache miss, loading audio from S3 for {phone_call_id}")
-        async with S3Client() as s3:
-            audio_data_raw, _, _ = await s3.download_file(
-                cast(str, phone_call.call_data)
+    _, audio_data, _ = await _process_audio_data(phone_call_id, db)
+
+    # Create WAV header
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(8000)
+        wav_file.writeframes(audio_data)
+
+    full_audio = wav_buffer.getvalue()
+    total_size = len(full_audio)
+
+    # Handle range request
+    range_header = request.headers.get("range")
+
+    if range_header:
+        try:
+            range_match = range_header.replace("bytes=", "").split("-")
+            start = int(range_match[0]) if range_match[0] else 0
+            end = int(range_match[1]) if range_match[1] else total_size - 1
+        except (IndexError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid range header")
+
+        if start >= total_size or end >= total_size:
+            raise HTTPException(
+                status_code=416, detail="Requested range not satisfiable"
             )
-        _, audio_data = process_audio_data(audio_data_raw)
 
-    async def audio_stream(audio_data: bytearray):
-        # Create WAV header using wave module
-        wav_buffer = io.BytesIO()
-        frame_rate = 8000
-        with wave.open(wav_buffer, "wb") as wav_file:
-            wav_file.setnchannels(1)  # mono
-            wav_file.setsampwidth(2)  # 2 bytes per sample (16-bit)
-            wav_file.setframerate(frame_rate)  # 8kHz for G.711
-            wav_file.setnframes(len(audio_data))
+        chunk_size = end - start + 1
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{total_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+            "Content-Type": "audio/wav",
+            "Content-Disposition": f"attachment; filename={phone_call_id}.wav",
+        }
+        return Response(
+            full_audio[start : end + 1], status_code=206, headers=headers
+        )
 
-        # Send the header first
-        yield wav_buffer.getvalue()
-
-        # Process and yield audio data in chunks
-        for i in range(0, len(audio_data), frame_rate):
-            chunk = audio_data[i : i + frame_rate]
-            pcm_chunk = audioop.ulaw2lin(bytes(chunk), 2)
-            yield pcm_chunk
-
-    return StreamingResponse(audio_stream(audio_data), media_type="audio/wav")
+    # Return full audio if no range header
+    return Response(
+        full_audio,
+        media_type="audio/wav",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(total_size),
+            "Content-Disposition": f"attachment; filename={phone_call_id}.wav",
+        },
+    )
