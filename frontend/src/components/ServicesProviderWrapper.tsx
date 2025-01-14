@@ -14,7 +14,7 @@ export const ServicesProviderWrapper = ({ children }: PropsWithChildren) => {
         // Performance Monitoring
         tracesSampleRate: 0.1, //  Capture 100% of the transactions
         // Set 'tracePropagationTargets' to control for which URLs distributed tracing should be enabled
-        tracePropagationTargets: ["api.helixion.com"],
+        tracePropagationTargets: ["api.helixion.ai"],
         replaysSessionSampleRate: 1.0,
       });
     }
