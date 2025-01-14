@@ -121,3 +121,7 @@ export const getAudioTranscript = async (phoneCallId: string) => {
   }
   return response;
 };
+
+export const getPlayAudioUrl = (phoneCallId: string) => {
+  return `${baseUrl}/api/v1/phone/play-audio/${phoneCallId}`;
+};

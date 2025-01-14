@@ -1,8 +1,8 @@
 import { BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
-import { Sheet, SheetContent } from "./ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
-import { getAudioTranscript } from "@/utils/apiCalls";
+import { getAudioTranscript, getPlayAudioUrl } from "@/utils/apiCalls";
 import { toast } from "sonner";
 import { LoadingView } from "./Loader";
 import { AudioPlayer } from "./audio/AudioPlayer";
@@ -44,6 +44,9 @@ export const CallDisplay = (props: {
         setOpen(open);
       }}
     >
+      <SheetHeader>
+        <SheetTitle>Call Audio</SheetTitle>
+      </SheetHeader>
       <SheetContent className="space-y-2 overflow-y-auto">
         {transcriptLoading ? (
           <LoadingView text="Loading call..." />
@@ -51,7 +54,7 @@ export const CallDisplay = (props: {
           <div>
             {audioTranscript.speaker_segments.length > 0 && props.call && (
               <AudioPlayer
-                audioUrl={`/api/v1/phone/play-audio/${props.call.id}`}
+                audioUrl={getPlayAudioUrl(props.call.id)}
                 audioRef={audioRef}
                 currentSegment={currentSegment}
                 speakerSegments={audioTranscript.speaker_segments}
