@@ -6,6 +6,7 @@ fastapi
 httpx
 numpy
 pydantic-settings
+python-multipart
 sqlalchemy[asyncio]
 twilio
 uvicorn

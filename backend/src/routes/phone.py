@@ -2,7 +2,6 @@ import asyncio
 import audioop
 import base64
 import io
-import json
 import logging
 import wave
 from typing import AsyncGenerator, cast
@@ -62,17 +61,21 @@ router = APIRouter(
 )
 
 
-async def _validate_twilio_request(request: Request):
+async def _validate_twilio_request(request: Request) -> dict:
     signature = request.headers.get("X-Twilio-Signature")
     if not signature:
         raise HTTPException(status_code=403, detail="Missing Twilio signature")
-    body = await request.body()
-    body_json = json.loads(body)
-    if not twilio_request_validator.validate(
-        request.url, body_json, signature
-    ):
+    scheme = request.headers.get(
+        "X-Forwarded-Proto", "http"
+    )  # Default to 'http' if header is absent
+    host = request.headers.get("X-Forwarded-Host", request.url.hostname)
+    full_url = f"{scheme}://{host}{request.url.path}"
+
+    form_data = await request.form()
+    if not twilio_request_validator.validate(full_url, form_data, signature):
         raise HTTPException(status_code=403, detail="Invalid Twilio request")
-    return body_json
+
+    return dict(form_data)
 
 
 class OutboundCallRequest(BaseModel):

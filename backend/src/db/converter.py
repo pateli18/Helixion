@@ -17,7 +17,8 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
         }
     else:
         latest_event = sorted(
-            phone_call.events, key=lambda event: event.payload["Timestamp"]
+            phone_call.events,
+            key=lambda event: int(event.payload["SequenceNumber"]),
         )[-1]
         event_payload = latest_event.payload
 
