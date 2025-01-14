@@ -17,3 +17,10 @@ export type PhoneCallMetadata = {
   duration?: number;
   recording_available: boolean;
 };
+
+export type SpeakerSegment = {
+  timestamp: number;
+  speaker: "User" | "Assistant";
+  transcript: string;
+  item_id: string;
+};

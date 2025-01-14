@@ -1,6 +1,7 @@
 aiobotocore
 aiofiles
 asyncpg
+cachetools
 fastapi
 httpx
 pydantic-settings

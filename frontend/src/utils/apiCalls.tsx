@@ -1,4 +1,4 @@
-import { PhoneCallMetadata } from "@/types";
+import { PhoneCallMetadata, SpeakerSegment } from "@/types";
 import Ajax from "./Ajax";
 
 export let baseUrl = "";
@@ -97,6 +97,19 @@ export const getCallHistory = async () => {
   try {
     response = await Ajax.req<PhoneCallMetadata[]>({
       url: `${baseUrl}/api/v1/phone/call-history`,
+      method: "GET",
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const getAudioTranscript = async (phoneCallId: string) => {
+  let response = null;
+  try {
+    response = await Ajax.req<SpeakerSegment[]>({
+      url: `${baseUrl}/api/v1/phone/audio-transcript/${phoneCallId}`,
       method: "GET",
     });
   } catch (error) {

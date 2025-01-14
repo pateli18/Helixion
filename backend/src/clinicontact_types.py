@@ -207,3 +207,15 @@ class PhoneCallMetadata(BaseModel):
     created_at: SerializedDateTime
     duration: Optional[int] = None
     recording_available: bool
+
+
+class Speaker(str, Enum):
+    user = "User"
+    assistant = "Assistant"
+
+
+class SpeakerSegment(BaseModel):
+    timestamp: float
+    speaker: Speaker
+    transcript: str
+    item_id: str

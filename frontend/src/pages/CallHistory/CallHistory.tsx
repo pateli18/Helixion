@@ -8,31 +8,13 @@ import { cn } from "@/lib/utils";
 import { ColumnDef } from "@tanstack/react-table";
 import { forwardRef, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import { PhoneCallMetadata, PhoneCallStatus } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { getCallHistory } from "@/utils/apiCalls";
 import { LoadingView } from "@/components/Loader";
 import { Layout } from "@/components/Layout";
-
-const localizeDate = (rawDateString: string) => {
-  let date = new Date(rawDateString);
-
-  // convert date from utc to local
-  date = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
-
-  return date;
-};
-
-export const loadAndFormatDate = (rawDateString: string) => {
-  // Parse the ISO format date
-  const date = localizeDate(rawDateString);
-
-  // Format the date in a human-readable format
-  const formattedDate = format(date, "MMM d, yyyy h:mm a");
-
-  return formattedDate;
-};
+import { formatDuration, loadAndFormatDate } from "@/utils/dateFormat";
+import { CallDisplay } from "@/components/CallDisplay";
 
 const ClickToCopy = forwardRef<
   HTMLDivElement,
@@ -88,25 +70,12 @@ const StatusBadge = (props: { status: PhoneCallStatus }) => {
   );
 };
 
-const formatDuration = (seconds: number) => {
-  if (!seconds) return "";
-
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = seconds % 60;
-
-  const parts = [];
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0) parts.push(`${minutes}m`);
-  if (remainingSeconds > 0 || parts.length === 0)
-    parts.push(`${remainingSeconds}s`);
-
-  return parts.join(" ");
-};
-
 export const CallHistoryPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [callHistory, setCallHistory] = useState<PhoneCallMetadata[]>([]);
+  const [selectedCall, setSelectedCall] = useState<PhoneCallMetadata | null>(
+    null
+  );
 
   useEffect(() => {
     setIsLoading(true);
@@ -225,7 +194,12 @@ export const CallHistoryPage = () => {
       cell: ({ row }: any) => {
         if (row.original.recording_available) {
           return (
-            <Badge className="cursor-pointer hover:bg-gray-500">Listen</Badge>
+            <Badge
+              className="cursor-pointer hover:bg-gray-500"
+              onClick={() => setSelectedCall(row.original)}
+            >
+              Listen
+            </Badge>
           );
         } else {
           return null;
@@ -241,6 +215,7 @@ export const CallHistoryPage = () => {
       ) : (
         <DataTable data={callHistory} columns={columns} />
       )}
+      <CallDisplay call={selectedCall} setCall={setSelectedCall} />
     </Layout>
   );
 };
