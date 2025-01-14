@@ -29,7 +29,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(browser.router, prefix="/api/v1")
 app.include_router(phone.router, prefix="/api/v1")
 
-origins = ["https://clinicontact-frontend.onrender.com"]
+origins = ["https://app.helixion.ai"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

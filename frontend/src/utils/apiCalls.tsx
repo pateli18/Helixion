@@ -3,7 +3,7 @@ import Ajax from "./Ajax";
 
 export let baseUrl = "";
 if (import.meta.env.VITE_ENV === "prod") {
-  baseUrl = "https://clinicontact.onrender.com";
+  baseUrl = "https://api.helixion.ai";
 }
 
 export const createSession = async (payload: Record<string, string>) => {
