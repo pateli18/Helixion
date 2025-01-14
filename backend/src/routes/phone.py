@@ -102,9 +102,10 @@ async def outbound_call(
     db: async_scoped_session = Depends(get_session),
 ):
     phone_call_id = uuid4()
+    from_phone_number = "+16282385962"
     call = twilio_client.calls.create(
         to=request.phone_number,
-        from_="+16282385962",
+        from_=from_phone_number,
         twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/outbound-call-stream/{phone_call_id}" /></Connect></Response>',
         status_callback=f"https://{settings.host}/api/v1/phone/webhook/status",
         status_callback_event=[
@@ -119,6 +120,8 @@ async def outbound_call(
         phone_call_id,
         cast(str, call.sid),
         request.user_info,
+        from_phone_number,
+        request.phone_number,
         db,
     )
     await db.commit()

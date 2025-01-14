@@ -15,6 +15,8 @@ async def insert_phone_call(
     id: SerializedUUID,
     call_sid: str,
     input_data: dict,
+    from_phone_number: str,
+    to_phone_number: str,
     db: async_scoped_session,
 ) -> None:
     await db.execute(
@@ -22,6 +24,8 @@ async def insert_phone_call(
             id=id,
             call_sid=call_sid,
             input_data=input_data,
+            from_phone_number=from_phone_number,
+            to_phone_number=to_phone_number,
         )
     )
 
