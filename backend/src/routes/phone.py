@@ -107,7 +107,7 @@ async def outbound_call(
         to=request.phone_number,
         from_=from_phone_number,
         twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/outbound-call-stream/{phone_call_id}" /></Connect></Response>',
-        status_callback=f"https://{settings.host}/api/v1/phone/webhook/status",
+        status_callback=f"https://{settings.host}/api/v1/phone/webhook/status/{phone_call_id}",
         status_callback_event=[
             "initiated",
             "ringing",
