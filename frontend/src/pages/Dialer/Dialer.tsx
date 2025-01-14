@@ -1,4 +1,4 @@
-import { AudioPlayer } from "@/components/audio/AudioPlayer";
+import { LiveAudioPlayer } from "@/components/audio/LiveAudioPlayer";
 import { AudioVisualizer } from "@/components/audio/AudioVisualizer";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -317,7 +317,7 @@ export const PrimaryPage = () => {
           {!isPlaying && (
             <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
           )}
-          <AudioPlayer
+          <LiveAudioPlayer
             audioRef={audioRef}
             analyser={analyser}
             setAnalyser={setAnalyser}
