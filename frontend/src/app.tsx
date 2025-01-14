@@ -2,10 +2,11 @@ import "./assets/index.css";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-import { PrimaryPage } from "./pages/Primary/Primary";
+import { PrimaryPage } from "./pages/Dialer/Dialer";
 import { ServicesProviderWrapper } from "./components/ServicesProviderWrapper";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { CallHistoryPage } from "./pages/CallHistory/CallHistory";
 
 const container = document.getElementById("root");
 const root = createRoot(container!);
@@ -17,6 +18,7 @@ export const App = () => {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<PrimaryPage />} />
+            <Route path="/call-history" element={<CallHistoryPage />} />
           </Routes>
           <Toaster richColors />
         </BrowserRouter>

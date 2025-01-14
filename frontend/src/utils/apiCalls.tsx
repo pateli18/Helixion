@@ -1,3 +1,4 @@
+import { PhoneCallMetadata } from "@/types";
 import Ajax from "./Ajax";
 
 export let baseUrl = "";
@@ -86,6 +87,19 @@ export const hangUp = async (phoneCallId: string) => {
     });
   } catch (error) {
     response = false;
+    console.error(error);
+  }
+  return response;
+};
+
+export const getCallHistory = async () => {
+  let response = null;
+  try {
+    response = await Ajax.req<PhoneCallMetadata[]>({
+      url: `${baseUrl}/api/v1/phone/call-history`,
+      method: "GET",
+    });
+  } catch (error) {
     console.error(error);
   }
   return response;

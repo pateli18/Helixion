@@ -13,6 +13,8 @@ module.exports = {
 		"bg-yellow-500",
 		"bg-gray-500",
 		"bg-blue-500",
+		"bg-orange-500",
+		"bg-purple-500",
 		"w-[200px]",
 	],
   theme: {

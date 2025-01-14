@@ -1,5 +1,6 @@
 import { AudioPlayer } from "@/components/audio/AudioPlayer";
 import { AudioVisualizer } from "@/components/audio/AudioVisualizer";
+import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -284,48 +285,54 @@ export const PrimaryPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="space-y-4 px-4 my-16">
-        {phoneCallId === null && (
-          <AudioConnection
-            userInfo={{ name, email, age, location }}
-            audioRef={audioRef}
+    <Layout title="Dialer">
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="space-y-4 px-4 my-16">
+          {phoneCallId === null && (
+            <AudioConnection
+              userInfo={{ name, email, age, location }}
+              audioRef={audioRef}
+            />
+          )}
+          <div className="text-md text-gray-500">Enter Details</div>
+          <SampleField name="Name" value={name} setValue={setName} />
+          <SampleField name="Email" value={email} setValue={setEmail} />
+          <SampleField name="Age" value={age} setValue={setAge} />
+          <SampleField
+            name="Location"
+            value={location}
+            setValue={setLocation}
           />
-        )}
-        <div className="text-md text-gray-500">Enter Test Details</div>
-        <SampleField name="Name" value={name} setValue={setName} />
-        <SampleField name="Email" value={email} setValue={setEmail} />
-        <SampleField name="Age" value={age} setValue={setAge} />
-        <SampleField name="Location" value={location} setValue={setLocation} />
-        {isPlaying && phoneCallId && (
-          <div className="space-y-2">
-            <div className="text-md text-gray-500">Call in progress...</div>
-            <Button
-              onClick={() => handleCallHangUp(phoneCallId)}
-              variant="destructive"
-            >
-              Hang Up
-            </Button>
-          </div>
-        )}
-        {/* {!isPlaying && (
-          <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
-        )}
-        <AudioPlayer
-          audioRef={audioRef}
-          analyser={analyser}
-          setAnalyser={setAnalyser}
-          isPlaying={isPlaying}
-          setIsPlaying={setIsPlaying}
-          hide={true}
-        />
-        <AudioVisualizer
-          audioRef={audioRef}
-          analyser={analyser}
-          isPlaying={isPlaying}
-          speakerIntervals={speakerIntervals}
-        /> */}
+          {isPlaying && phoneCallId && (
+            <div className="space-y-2">
+              <div className="text-md text-gray-500">Call in progress...</div>
+              <Button
+                onClick={() => handleCallHangUp(phoneCallId)}
+                variant="destructive"
+              >
+                Hang Up
+              </Button>
+            </div>
+          )}
+          {!isPlaying && (
+            <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+          )}
+          <AudioPlayer
+            audioRef={audioRef}
+            analyser={analyser}
+            setAnalyser={setAnalyser}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            hide={true}
+          />
+          <AudioVisualizer
+            audioRef={audioRef}
+            analyser={analyser}
+            isPlaying={isPlaying}
+            speakerIntervals={speakerIntervals}
+          />
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 };

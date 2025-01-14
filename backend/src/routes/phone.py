@@ -2,26 +2,42 @@ import asyncio
 import audioop
 import base64
 import io
+import json
 import logging
 import wave
 from typing import AsyncGenerator, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
+from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
 from src.ai import AiCaller
 from src.caller import CallRouter
-from src.clinicontact_types import SerializedUUID
-from src.db.api import get_phone_call, insert_phone_call
+from src.clinicontact_types import PhoneCallMetadata, SerializedUUID
+from src.db.api import (
+    get_phone_call,
+    get_phone_calls,
+    insert_phone_call,
+    insert_phone_call_event,
+)
 from src.db.base import get_session
+from src.db.converter import convert_phone_call_model
 from src.settings import settings
 
 call_messages: dict[SerializedUUID, dict[str, asyncio.Queue[str]]] = {}
 twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
+twilio_request_validator = RequestValidator(settings.twilio_auth_token)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +49,19 @@ router = APIRouter(
 )
 
 
+async def _validate_twilio_request(request: Request):
+    signature = request.headers.get("X-Twilio-Signature")
+    if not signature:
+        raise HTTPException(status_code=403, detail="Missing Twilio signature")
+    body = await request.body()
+    body_json = json.loads(body)
+    if not twilio_request_validator.validate(
+        request.url, body_json, signature
+    ):
+        raise HTTPException(status_code=403, detail="Invalid Twilio request")
+    return body_json
+
+
 class OutboundCallRequest(BaseModel):
     phone_number: str
     user_info: dict
@@ -40,6 +69,18 @@ class OutboundCallRequest(BaseModel):
 
 class OutboundCallResponse(BaseModel):
     phone_call_id: SerializedUUID
+
+
+@router.post("/webhook/status/{phone_call_id}", status_code=204)
+async def status_webhook(
+    phone_call_id: SerializedUUID,
+    payload: dict = Depends(_validate_twilio_request),
+    db: async_scoped_session = Depends(get_session),
+):
+    await insert_phone_call_event(phone_call_id, payload, db)
+    await db.commit()
+
+    return Response(status_code=204)
 
 
 @router.post("/outbound-call", response_model=OutboundCallResponse)
@@ -52,6 +93,13 @@ async def outbound_call(
         to=request.phone_number,
         from_="+16282385962",
         twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/outbound-call-stream/{phone_call_id}" /></Connect></Response>',
+        status_callback=f"https://{settings.host}/api/v1/phone/webhook/status",
+        status_callback_event=[
+            "initiated",
+            "ringing",
+            "answered",
+            "completed",
+        ],
     )
 
     await insert_phone_call(
@@ -173,3 +221,11 @@ async def hang_up(
         status="completed"
     )
     return Response(status_code=204)
+
+
+@router.get("/call-history", response_model=list[PhoneCallMetadata])
+async def get_call_history(
+    db: async_scoped_session = Depends(get_session),
+) -> list[PhoneCallMetadata]:
+    phone_calls = await get_phone_calls(db)
+    return [convert_phone_call_model(phone_call) for phone_call in phone_calls]

@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union, cast
 from uuid import UUID
@@ -6,6 +7,9 @@ from pydantic import BaseModel, PlainSerializer, model_serializer
 
 SerializedUUID = Annotated[
     UUID, PlainSerializer(lambda x: str(x), return_type=str)
+]
+SerializedDateTime = Annotated[
+    datetime, PlainSerializer(lambda x: x.isoformat(), return_type=str)
 ]
 
 
@@ -182,3 +186,24 @@ class OpenAiChatInput(BaseModel):
             del output["response_format"]
             del output["stream_options"]
         return output
+
+
+class PhoneCallStatus(str, Enum):
+    queued = "queued"
+    ringing = "ringing"
+    in_progress = "in-progress"
+    completed = "completed"
+    busy = "busy"
+    failed = "failed"
+    no_answer = "no-answer"
+
+
+class PhoneCallMetadata(BaseModel):
+    id: SerializedUUID
+    from_phone_number: str
+    to_phone_number: str
+    input_data: dict
+    status: PhoneCallStatus
+    created_at: SerializedDateTime
+    duration: Optional[int] = None
+    recording_available: bool

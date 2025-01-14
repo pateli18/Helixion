@@ -1,3 +1,3 @@
-from .PhoneCall import PhoneCallModel
+from .PhoneCall import PhoneCallEventModel, PhoneCallModel
 
-__all__ = ["PhoneCallModel"]
+__all__ = ["PhoneCallEventModel", "PhoneCallModel"]
