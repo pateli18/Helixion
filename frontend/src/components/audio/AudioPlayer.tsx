@@ -3,35 +3,7 @@ import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { formatTime } from "@/utils/dateFormat";
-
-const speakerColors = {
-  User: "#3B82F6",
-  Assistant: "#16A34A",
-};
-
-const calculatedBars = (props: {
-  canvas: HTMLCanvasElement;
-  canvasCtx: CanvasRenderingContext2D;
-  barHeights: BarHeight[];
-}) => {
-  const barCount = props.barHeights.length;
-  const barWidth = (props.canvas.width - (barCount - 1) * 2) / barCount; // 2px gap between bars
-  const barGap = 2;
-
-  const bars = props.barHeights.map((barHeight, i) => {
-    const actualHeight = barHeight.height * props.canvas.height;
-    const y = (props.canvas.height - actualHeight) / 2;
-    const x = i * (barWidth + barGap);
-    return {
-      speaker: barHeight.speaker,
-      x,
-      y,
-      width: barWidth,
-      height: actualHeight,
-    };
-  });
-  return bars;
-};
+import { calculatedBars, colorMap } from "./visualizationUtils";
 
 export const AudioPlayer = (props: {
   audioUrl: string;
@@ -112,7 +84,7 @@ export const AudioPlayer = (props: {
 
       // Redraw all bars
       bars.forEach((bar) => {
-        canvasCtx.fillStyle = speakerColors[bar.speaker];
+        canvasCtx.fillStyle = bar.color;
         canvasCtx.fillRect(bar.x, bar.y, bar.width, bar.height);
       });
 
@@ -125,8 +97,8 @@ export const AudioPlayer = (props: {
         canvasCtx.beginPath();
         canvasCtx.moveTo(playheadX, 0);
         canvasCtx.lineTo(playheadX, canvas.height);
-        canvasCtx.strokeStyle = "rgb(239, 68, 68)";
-        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeStyle = colorMap["audio-bar"];
+        canvasCtx.lineWidth = 10;
         canvasCtx.stroke();
       }
     };
@@ -172,7 +144,7 @@ export const AudioPlayer = (props: {
         </div>
 
         <div className="flex items-center justify-center space-x-2">
-          <Button variant="outline" size="icon" onClick={handleSkipBack}>
+          <Button variant="default" size="icon" onClick={handleSkipBack}>
             <SkipBack className="h-4 w-4" />
           </Button>
 
@@ -184,7 +156,7 @@ export const AudioPlayer = (props: {
             )}
           </Button>
 
-          <Button variant="outline" size="icon" onClick={handleSkipForward}>
+          <Button variant="default" size="icon" onClick={handleSkipForward}>
             <SkipForward className="h-4 w-4" />
           </Button>
         </div>
