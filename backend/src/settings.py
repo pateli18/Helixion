@@ -1,5 +1,6 @@
 import logging
 import logging.config
+from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     twilio_auth_token: str
     postgres_uri: str
     host: str = "localhost:8000"
+    sentry_dsn: Optional[str] = None
 
     @property
     def postgres_connection_string(self) -> str:

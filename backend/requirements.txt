@@ -7,6 +7,7 @@ httpx
 numpy
 pydantic-settings
 python-multipart
+sentry-sdk[fastapi]
 sqlalchemy[asyncio]
 twilio
 uvicorn

@@ -1,15 +1,21 @@
-import logging
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.db.base import db_setup, shutdown_session
 from src.routes import browser, phone
-from src.settings import setup_logging
+from src.settings import settings, setup_logging
 
 setup_logging()
-logger = logging.getLogger(__name__)
+
+if settings.sentry_dsn is not None:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+    )
 
 
 @asynccontextmanager
