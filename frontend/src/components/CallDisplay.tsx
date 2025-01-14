@@ -1,11 +1,18 @@
 import { BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "./ui/sheet";
 import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
 import { getAudioTranscript, getPlayAudioUrl } from "@/utils/apiCalls";
 import { toast } from "sonner";
 import { LoadingView } from "./Loader";
 import { AudioPlayer } from "./audio/AudioPlayer";
+import { loadAndFormatDate } from "@/utils/dateFormat";
 
 export const CallDisplay = (props: {
   call: PhoneCallMetadata | null;
@@ -44,10 +51,13 @@ export const CallDisplay = (props: {
         setOpen(open);
       }}
     >
-      <SheetHeader>
-        <SheetTitle>Call Audio</SheetTitle>
-      </SheetHeader>
       <SheetContent className="space-y-2 overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Call Audio</SheetTitle>
+          <SheetDescription>
+            {props.call?.created_at && loadAndFormatDate(props.call.created_at)}
+          </SheetDescription>
+        </SheetHeader>
         {transcriptLoading ? (
           <LoadingView text="Loading call..." />
         ) : (
