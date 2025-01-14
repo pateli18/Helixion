@@ -14,7 +14,15 @@ const config: UserConfigExport = {
 };
 
 if (build) {
-  config.plugins = [react()];
+  config.plugins = [
+    react(),
+    sentryVitePlugin({
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: "helixion",
+      project: "helixion-frontend",
+      debug: true,
+    }),
+  ];
   config.build = {
     sourcemap: true,
   };
@@ -27,7 +35,6 @@ if (build) {
     // this is required to avoid CORS requests
     proxy: {
       "/api": "http://localhost:8000/",
-      "/media-stream-website": "ws://localhost:8000/",
     },
   };
 }
