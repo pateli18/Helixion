@@ -66,12 +66,11 @@ export const outboundCall = async (
   return response;
 };
 
-export const streamSpeaker = async function* (phoneCallId: string) {
-  for await (const payload of Ajax.stream<{
-    timestamp: number;
-    speaker: "User" | "Assistant";
-  }>({
-    url: `${baseUrl}/api/v1/phone/stream-speaker/${phoneCallId}`,
+export const streamSpeakerSegments = async function* (phoneCallId: string) {
+  for await (const payload of Ajax.stream<
+    SpeakerSegment | { call_ended: boolean }
+  >({
+    url: `${baseUrl}/api/v1/phone/stream-speaker-segments/${phoneCallId}`,
     method: "GET",
   })) {
     yield payload;
@@ -124,4 +123,8 @@ export const getAudioTranscript = async (phoneCallId: string) => {
 
 export const getPlayAudioUrl = (phoneCallId: string) => {
   return `${baseUrl}/api/v1/phone/play-audio/${phoneCallId}`;
+};
+
+export const getAudioStreamUrl = (phoneCallId: string) => {
+  return `${baseUrl}/api/v1/phone/stream-audio/${phoneCallId}`;
 };

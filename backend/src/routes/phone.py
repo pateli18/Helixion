@@ -202,7 +202,7 @@ async def stream_audio(
     )
 
 
-@router.get("/stream-speaker/{phone_call_id}")
+@router.get("/stream-speaker-segments/{phone_call_id}")
 async def stream_speaker(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),

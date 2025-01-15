@@ -128,7 +128,7 @@ export const AudioPlayer = (props: {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 space-y-4">
+    <div className="w-full mx-auto p-4 space-y-4">
       <canvas
         ref={canvasRef}
         className="w-full h-48 rounded-lg cursor-pointer"

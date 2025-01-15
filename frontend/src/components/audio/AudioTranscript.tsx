@@ -7,11 +7,11 @@ import { Badge } from "../ui/badge";
 
 const SegmentDisplay = (props: {
   segment: SpeakerSegment;
-  audioRef: MutableRefObject<HTMLAudioElement | null>;
+  audioRef?: MutableRefObject<HTMLAudioElement | null>;
   currentSegment: MutableRefObject<SpeakerSegment | null>;
 }) => {
   const handleTimeClick = () => {
-    if (props.audioRef.current) {
+    if (props.audioRef && props.audioRef.current) {
       props.audioRef.current.currentTime = props.segment.timestamp;
     }
   };
@@ -27,6 +27,7 @@ const SegmentDisplay = (props: {
         variant="link"
         onClick={handleTimeClick}
         className="text-blue-500 hover:underline px-0"
+        disabled={!props.audioRef}
       >
         [{formatTime(props.segment.timestamp)}]
       </Button>
@@ -40,7 +41,7 @@ const SegmentDisplay = (props: {
 
 export const AudioTranscriptDisplay = (props: {
   segments: SpeakerSegment[];
-  audioRef: MutableRefObject<HTMLAudioElement | null>;
+  audioRef?: MutableRefObject<HTMLAudioElement | null>;
   currentSegment: MutableRefObject<SpeakerSegment | null>;
 }) => {
   return (

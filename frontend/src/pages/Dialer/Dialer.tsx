@@ -1,5 +1,5 @@
 import { LiveAudioPlayer } from "@/components/audio/LiveAudioPlayer";
-import { AudioVisualizer } from "@/components/audio/AudioVisualizer";
+import { LiveCallDisplay } from "@/components/CallDisplay";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,16 +9,14 @@ import {
   hangUp,
   outboundCall,
   storeSession,
-  streamSpeaker,
+  streamSpeakerSegments,
 } from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-const AudioConnection = (props: {
-  userInfo: Record<string, string>;
-  audioRef: React.RefObject<HTMLAudioElement>;
-}) => {
+const AudioConnection = (props: { userInfo: Record<string, string> }) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [settingUpSession, setSettingUpSession] = useState(false);
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
@@ -42,8 +40,8 @@ const AudioConnection = (props: {
 
     // Set up to play remote audio from the model
     pc.ontrack = (e) => {
-      if (props.audioRef.current) {
-        props.audioRef.current.srcObject = e.streams[0];
+      if (audioRef.current) {
+        audioRef.current.srcObject = e.streams[0];
       }
     };
 
@@ -150,6 +148,7 @@ const AudioConnection = (props: {
           <ReloadIcon className="animate-spin ml-2 h-4 w-4" />
         )}
       </Button>
+      <audio ref={audioRef} autoPlay className="hidden" />
     </div>
   );
 };
@@ -236,12 +235,6 @@ export const PrimaryPage = () => {
   const [age, setAge] = useState("30");
   const [location, setLocation] = useState("New York, NY");
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const speakerIntervals = useRef<
-    { timestamp: number; speaker: "User" | "Assistant" }[]
-  >([]);
 
   const handleCallPhoneNumber = async (phoneNumber: string) => {
     const response = await outboundCall(phoneNumber, {
@@ -254,33 +247,6 @@ export const PrimaryPage = () => {
       toast.error("Failed to start call, please try again");
     } else {
       setPhoneCallId(response.phone_call_id);
-      setIsPlaying(true);
-      if (audioRef.current) {
-        audioRef.current.src = `/api/v1/phone/stream-audio/${response.phone_call_id}`;
-      }
-      // stream speaker intervals in the background
-      (async () => {
-        try {
-          for await (const payload of streamSpeaker(response.phone_call_id)) {
-            speakerIntervals.current.push(payload);
-            console.log(speakerIntervals.current);
-          }
-        } catch (e) {
-          console.error(e);
-        }
-        setIsPlaying(false);
-        setPhoneCallId(null);
-        speakerIntervals.current = [];
-      })();
-    }
-  };
-
-  const handleCallHangUp = async (phoneCallId: string) => {
-    const response = await hangUp(phoneCallId);
-    if (response === false) {
-      toast.error("Failed to hang up call, please try again");
-    } else {
-      toast.success("Hanging up call...");
     }
   };
 
@@ -289,10 +255,7 @@ export const PrimaryPage = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="space-y-4 px-4 my-16">
           {phoneCallId === null && (
-            <AudioConnection
-              userInfo={{ name, email, age, location }}
-              audioRef={audioRef}
-            />
+            <AudioConnection userInfo={{ name, email, age, location }} />
           )}
           <div className="text-md text-gray-500">Enter Details</div>
           <SampleField name="Name" value={name} setValue={setName} />
@@ -303,33 +266,12 @@ export const PrimaryPage = () => {
             value={location}
             setValue={setLocation}
           />
-          {isPlaying && phoneCallId && (
-            <div className="space-y-2">
-              <div className="text-md text-gray-500">Call in progress...</div>
-              <Button
-                onClick={() => handleCallHangUp(phoneCallId)}
-                variant="destructive"
-              >
-                Hang Up
-              </Button>
-            </div>
-          )}
-          {!isPlaying && (
+          {phoneCallId === null && (
             <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
           )}
-          <LiveAudioPlayer
-            audioRef={audioRef}
-            analyser={analyser}
-            setAnalyser={setAnalyser}
-            isPlaying={isPlaying}
-            setIsPlaying={setIsPlaying}
-            hide={true}
-          />
-          <AudioVisualizer
-            audioRef={audioRef}
-            analyser={analyser}
-            isPlaying={isPlaying}
-            speakerIntervals={speakerIntervals}
+          <LiveCallDisplay
+            phoneCallId={phoneCallId}
+            setPhoneCallId={setPhoneCallId}
           />
         </div>
       </div>

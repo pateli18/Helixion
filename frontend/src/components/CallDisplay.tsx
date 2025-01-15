@@ -8,11 +8,18 @@ import {
 } from "./ui/sheet";
 import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
-import { getAudioTranscript, getPlayAudioUrl } from "@/utils/apiCalls";
+import {
+  getAudioStreamUrl,
+  getAudioTranscript,
+  getPlayAudioUrl,
+  hangUp,
+  streamSpeakerSegments,
+} from "@/utils/apiCalls";
 import { toast } from "sonner";
 import { LoadingView } from "./Loader";
 import { AudioPlayer } from "./audio/AudioPlayer";
 import { loadAndFormatDate } from "@/utils/dateFormat";
+import { LiveAudioPlayer } from "./audio/LiveAudioPlayer";
 
 export const CallDisplay = (props: {
   call: PhoneCallMetadata | null;
@@ -75,6 +82,93 @@ export const CallDisplay = (props: {
             <AudioTranscriptDisplay
               segments={audioTranscript.speaker_segments}
               audioRef={audioRef}
+              currentSegment={currentSegment}
+            />
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+};
+
+export const LiveCallDisplay = (props: {
+  phoneCallId: string | null;
+  setPhoneCallId: (phoneCallId: string | null) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const speakerSegments = useRef<SpeakerSegment[]>([]);
+  const currentSegment = useRef<SpeakerSegment | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [callEnded, setCallEnded] = useState(false);
+
+  const handleHangUp = async () => {
+    if (!props.phoneCallId) return;
+    const response = await hangUp(props.phoneCallId);
+    if (response === false) {
+      toast.error("Failed to hang up call, please try again");
+    } else {
+      toast.success("Hanging up call...");
+      props.setPhoneCallId(null);
+      speakerSegments.current = [];
+      currentSegment.current = null;
+      setOpen(false);
+    }
+  };
+
+  const streamSpeakers = async () => {
+    if (!props.phoneCallId) return;
+    try {
+      for await (const payload of streamSpeakerSegments(props.phoneCallId)) {
+        if ("call_ended" in payload && payload.call_ended) {
+          setCallEnded(true);
+          break;
+        } else {
+          speakerSegments.current.push(payload as SpeakerSegment);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (!props.phoneCallId) return;
+    setOpen(true);
+
+    // kick off streamingSpeakerSegments in the background
+    (async () => {
+      await streamSpeakers();
+    })();
+  }, [props.phoneCallId]);
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(open) => {
+        if (!open) {
+          props.setPhoneCallId(null);
+          speakerSegments.current = [];
+          currentSegment.current = null;
+        }
+        setOpen(open);
+      }}
+    >
+      <SheetContent className="space-y-2 overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Live Call Audio</SheetTitle>
+          <SheetDescription>Call In Progress...</SheetDescription>
+        </SheetHeader>
+        {props.phoneCallId && (
+          <div>
+            <LiveAudioPlayer
+              audioRef={audioRef}
+              audioUrl={getAudioStreamUrl(props.phoneCallId)}
+              speakerSegments={speakerSegments}
+              handleHangUp={handleHangUp}
+              callEnded={callEnded}
+            />
+            <AudioTranscriptDisplay
+              segments={speakerSegments.current}
               currentSegment={currentSegment}
             />
           </div>

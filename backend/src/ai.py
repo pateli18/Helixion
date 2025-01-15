@@ -14,7 +14,12 @@ import websockets
 from pydantic import BaseModel, Field
 
 from src.aws_utils import S3Client
-from src.clinicontact_types import ModelType, SerializedUUID, Speaker
+from src.clinicontact_types import (
+    ModelType,
+    SerializedUUID,
+    Speaker,
+    SpeakerSegment,
+)
 from src.db.api import update_phone_call
 from src.db.base import async_session_scope
 from src.settings import settings
@@ -214,12 +219,12 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         if response["type"] == "input_audio_buffer.speech_started":
             self._user_speaking = True
             self._message_queues["speaker_queue"].put_nowait(
-                json.dumps(
-                    {
-                        "timestamp": self._audio_total_buffer_ms / 1000,
-                        "speaker": Speaker.user.value,
-                    }
-                )
+                SpeakerSegment(
+                    timestamp=self._audio_total_buffer_ms / 1000,
+                    speaker=Speaker.user,
+                    transcript="",
+                    item_id="",
+                ).model_dump_json()
             )
             audio_start_ms = response["audio_start_ms"]
             for audio, individual_ms, ms in self._audio_input_buffer:
@@ -230,12 +235,12 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         elif response["type"] == "input_audio_buffer.speech_stopped":
             self._user_speaking = False
             self._message_queues["speaker_queue"].put_nowait(
-                json.dumps(
-                    {
-                        "timestamp": self._audio_total_buffer_ms / 1000,
-                        "speaker": Speaker.assistant.value,
-                    }
-                )
+                SpeakerSegment(
+                    timestamp=self._audio_total_buffer_ms / 1000,
+                    speaker=Speaker.assistant,
+                    transcript="",
+                    item_id="",
+                ).model_dump_json()
             )
         elif response["type"] == "response.audio.delta":
             audio_ms = self._audio_ms(response["delta"])
