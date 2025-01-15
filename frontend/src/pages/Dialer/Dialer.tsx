@@ -252,8 +252,8 @@ export const PrimaryPage = () => {
 
   return (
     <Layout title="Dialer">
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="space-y-4 px-4 my-16">
+      <div className="flex items-center justify-center">
+        <div className="space-y-4 px-4">
           {phoneCallId === null && (
             <AudioConnection userInfo={{ name, email, age, location }} />
           )}
