@@ -25,13 +25,18 @@ class CallRouter:
         self.mark_queue = []
         self.response_start_timestamp = None
         self.ai_caller = ai_caller
+        self._hang_up_requested = False
 
     async def send_to_human(self, websocket: WebSocket):
         try:
             async for message in self.ai_caller:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
-                        break
+                        self._hang_up_requested = True
+                    else:
+                        logger.warning(
+                            f"Received unexpected function call: {message['name']}"
+                        )
 
                 if message["type"] == "response.audio.delta":
                     audio_delta = {
@@ -113,6 +118,14 @@ class CallRouter:
                 elif data["event"] == "mark":
                     if self.mark_queue:
                         self.mark_queue.pop(0)
+                        if (
+                            self._hang_up_requested
+                            and len(self.mark_queue) == 0
+                        ):
+                            logger.info(
+                                "Hang up requested and all media processed"
+                            )
+                            break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
         except Exception:

@@ -249,7 +249,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
         return response
 
-    async def close(self):
+    async def close(self) -> None:
         if self._cleanup_started:
             logger.info("Cleanup already started")
             return
