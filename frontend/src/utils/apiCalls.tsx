@@ -66,11 +66,19 @@ export const outboundCall = async (
   return response;
 };
 
-export const streamSpeakerSegments = async function* (phoneCallId: string) {
-  for await (const payload of Ajax.stream<
-    SpeakerSegment | { call_ended: boolean }
-  >({
-    url: `${baseUrl}/api/v1/phone/stream-speaker-segments/${phoneCallId}`,
+type MetadataEvent =
+  | {
+      type: "call_end";
+      data: null;
+    }
+  | {
+      type: "speaker";
+      data: SpeakerSegment[];
+    };
+
+export const streamMetadata = async function* (phoneCallId: string) {
+  for await (const payload of Ajax.stream<MetadataEvent>({
+    url: `${baseUrl}/api/v1/phone/stream-metadata/${phoneCallId}`,
     method: "GET",
   })) {
     yield payload;

@@ -1,21 +1,37 @@
 import { BarHeight, SpeakerSegment } from "@/types";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { calculatedBars } from "./visualizationUtils";
 import { Button } from "../ui/button";
+import { formatTime } from "@/utils/dateFormat";
+import { cn } from "@/lib/utils";
 
 export const LiveAudioPlayer = (props: {
   audioRef: React.RefObject<HTMLAudioElement>;
   audioUrl: string;
-  speakerSegments?: React.MutableRefObject<SpeakerSegment[]>;
+  speakerSegments?: SpeakerSegment[];
   handleHangUp: () => void;
   callEnded: boolean;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const sourceNode = useRef<MediaElementAudioSourceNode | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const speakerSegmentsRef = useRef<SpeakerSegment[]>(
+    props.speakerSegments ?? []
+  );
+
+  useEffect(() => {
+    speakerSegmentsRef.current = props.speakerSegments ?? [];
+  }, [props.speakerSegments]);
+
+  const handleTimeUpdate = () => {
+    setCurrentTime(props.audioRef.current?.currentTime ?? 0);
+  };
 
   useEffect(() => {
     if (!canvasRef.current || !props.audioRef.current) return;
+
+    props.audioRef.current.addEventListener("timeupdate", handleTimeUpdate);
 
     const canvas = canvasRef.current;
     const canvasCtx = canvas.getContext("2d")!;
@@ -42,7 +58,7 @@ export const LiveAudioPlayer = (props: {
       analyserNode.getByteFrequencyData(dataArray);
       const currentTime = props.audioRef.current?.currentTime ?? 0;
 
-      const relevantSpeakerSegment = props.speakerSegments?.current?.findLast(
+      const relevantSpeakerSegment = speakerSegmentsRef.current?.findLast(
         (segment) => segment.timestamp <= currentTime
       );
 
@@ -104,21 +120,43 @@ export const LiveAudioPlayer = (props: {
     <div className="w-full mx-auto p-4 space-y-4">
       <canvas
         ref={canvasRef}
-        className="w-full h-48 rounded-lg cursor-pointer"
+        className={cn(
+          "w-full h-48 rounded-lg cursor-pointer",
+          (props.callEnded || currentTime === 0) && "hidden"
+        )}
         width={800}
         height={200}
       />
 
-      <div className="flex items-center justify-center space-x-2">
-        {props.callEnded ? (
-          <Button variant="secondary" size="sm" disabled>
-            Call Ended
-          </Button>
-        ) : (
-          <Button variant="destructive" size="sm" onClick={props.handleHangUp}>
-            Hang Up
-          </Button>
-        )}
+      <div className="space-y-2">
+        <div
+          className={cn(
+            "flex items-center justify-end text-sm text-gray-500",
+            currentTime === 0 && "hidden"
+          )}
+        >
+          <span>{formatTime(currentTime)}</span>
+        </div>
+        <div className="flex items-center justify-center space-x-2">
+          {!props.callEnded && currentTime === 0 && (
+            <Button variant="secondary" size="sm" disabled>
+              Dialing...
+            </Button>
+          )}
+          {props.callEnded ? (
+            <Button variant="secondary" size="sm" disabled>
+              Call Ended
+            </Button>
+          ) : (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={props.handleHangUp}
+            >
+              Hang Up
+            </Button>
+          )}
+        </div>
       </div>
       <audio
         autoPlay

@@ -22,16 +22,10 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
-from src.ai import AiCaller
+from src.ai import AiCaller, AiMessageQueues
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
 from src.caller import CallRouter
-from src.clinicontact_types import (
-    BarHeight,
-    PhoneCallMetadata,
-    SerializedUUID,
-    SpeakerSegment,
-)
 from src.db.api import (
     get_phone_call,
     get_phone_calls,
@@ -40,9 +34,16 @@ from src.db.api import (
 )
 from src.db.base import get_session
 from src.db.converter import convert_phone_call_model
+from src.helixion_types import (
+    CALL_END_EVENT,
+    BarHeight,
+    PhoneCallMetadata,
+    SerializedUUID,
+    SpeakerSegment,
+)
 from src.settings import settings
 
-call_messages: dict[SerializedUUID, dict[str, asyncio.Queue[str]]] = {}
+call_messages: dict[SerializedUUID, AiMessageQueues] = {}
 twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
 twilio_request_validator = RequestValidator(settings.twilio_auth_token)
 audio_cache_lock = asyncio.Lock()
@@ -130,10 +131,7 @@ async def outbound_call(
     await db.commit()
 
     # initialize queues for this call
-    call_messages[phone_call_id] = {
-        "speaker_queue": asyncio.Queue(),
-        "audio_queue": asyncio.Queue(),
-    }
+    call_messages[phone_call_id] = AiMessageQueues()
 
     return OutboundCallResponse(phone_call_id=phone_call_id)
 
@@ -183,10 +181,10 @@ async def stream_audio(
         yield wav_buffer.getvalue()
 
         audio_buffer = bytearray()
-        audio_queue = call_messages[phone_call_id]["audio_queue"]
+        audio_queue = call_messages[phone_call_id].audio_queue
         while True:
             event_data = await audio_queue.get()
-            if event_data == "END":
+            if event_data == CALL_END_EVENT:
                 yield bytes(audio_buffer)
                 break
             pcm_data = base64.b64decode(event_data)
@@ -202,8 +200,8 @@ async def stream_audio(
     )
 
 
-@router.get("/stream-speaker-segments/{phone_call_id}")
-async def stream_speaker(
+@router.get("/stream-metadata/{phone_call_id}")
+async def stream_metadata(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
 ):
@@ -211,18 +209,18 @@ async def stream_speaker(
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
 
-    async def speaker_stream(
+    async def metadata_stream(
         phone_call_id: SerializedUUID,
     ) -> AsyncGenerator[str, None]:
-        speaker_queue = call_messages[phone_call_id]["speaker_queue"]
+        metadata_queue = call_messages[phone_call_id].metadata_queue
         while True:
-            event_data = await speaker_queue.get()
-            if event_data == "END":
-                break
+            event_data = await metadata_queue.get()
             yield event_data + "\n"
+            if event_data.startswith('{"type": "call_end"'):
+                break
 
     return StreamingResponse(
-        speaker_stream(phone_call_id), media_type="application/x-ndjson"
+        metadata_stream(phone_call_id), media_type="application/x-ndjson"
     )
 
 

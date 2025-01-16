@@ -13,7 +13,7 @@ import {
   getAudioTranscript,
   getPlayAudioUrl,
   hangUp,
-  streamSpeakerSegments,
+  streamMetadata,
 } from "@/utils/apiCalls";
 import { toast } from "sonner";
 import { LoadingView } from "./Loader";
@@ -96,7 +96,7 @@ export const LiveCallDisplay = (props: {
   setPhoneCallId: (phoneCallId: string | null) => void;
 }) => {
   const [open, setOpen] = useState(false);
-  const speakerSegments = useRef<SpeakerSegment[]>([]);
+  const [speakerSegments, setSpeakerSegments] = useState<SpeakerSegment[]>([]);
   const currentSegment = useRef<SpeakerSegment | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [callEnded, setCallEnded] = useState(false);
@@ -109,21 +109,22 @@ export const LiveCallDisplay = (props: {
     } else {
       toast.success("Hanging up call...");
       props.setPhoneCallId(null);
-      speakerSegments.current = [];
+      setSpeakerSegments([]);
       currentSegment.current = null;
       setOpen(false);
     }
   };
 
-  const streamSpeakers = async () => {
+  const runMetadataStream = async () => {
     if (!props.phoneCallId) return;
     try {
-      for await (const payload of streamSpeakerSegments(props.phoneCallId)) {
-        if ("call_ended" in payload && payload.call_ended) {
+      for await (const payload of streamMetadata(props.phoneCallId)) {
+        console.log(payload);
+        if (payload.type === "call_end") {
           setCallEnded(true);
           break;
         } else {
-          speakerSegments.current.push(payload as SpeakerSegment);
+          setSpeakerSegments(payload.data);
         }
       }
     } catch (e) {
@@ -137,7 +138,7 @@ export const LiveCallDisplay = (props: {
 
     // kick off streamingSpeakerSegments in the background
     (async () => {
-      await streamSpeakers();
+      await runMetadataStream();
     })();
   }, [props.phoneCallId]);
 
@@ -147,7 +148,7 @@ export const LiveCallDisplay = (props: {
       onOpenChange={(open) => {
         if (!open) {
           props.setPhoneCallId(null);
-          speakerSegments.current = [];
+          setSpeakerSegments([]);
           currentSegment.current = null;
         }
         setOpen(open);
@@ -156,7 +157,9 @@ export const LiveCallDisplay = (props: {
       <SheetContent className="space-y-2 overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Live Call Audio</SheetTitle>
-          <SheetDescription>Call In Progress...</SheetDescription>
+          <SheetDescription>
+            The audio will be a few seconds behind the actual call
+          </SheetDescription>
         </SheetHeader>
         {props.phoneCallId && (
           <div>
@@ -168,7 +171,7 @@ export const LiveCallDisplay = (props: {
               callEnded={callEnded}
             />
             <AudioTranscriptDisplay
-              segments={speakerSegments.current}
+              segments={speakerSegments}
               currentSegment={currentSegment}
             />
           </div>

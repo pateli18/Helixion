@@ -5,23 +5,33 @@ import logging
 import os
 from contextlib import AsyncExitStack
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import AsyncContextManager, AsyncIterator, Literal, Optional
+from typing import (
+    AsyncContextManager,
+    AsyncIterator,
+    Literal,
+    Optional,
+    Sequence,
+    Union,
+)
 
 import aiofiles
 import httpx
 import websockets
 from pydantic import BaseModel, Field
+from pydantic.json import pydantic_encoder
 
 from src.aws_utils import S3Client
-from src.clinicontact_types import (
+from src.db.api import update_phone_call
+from src.db.base import async_session_scope
+from src.helixion_types import (
+    CALL_END_EVENT,
     ModelType,
     SerializedUUID,
     Speaker,
     SpeakerSegment,
 )
-from src.db.api import update_phone_call
-from src.db.base import async_session_scope
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -74,7 +84,7 @@ class AiSessionConfiguration(BaseModel):
 4. Once you have verified the information, let the user know that they will receive a call from the study organizer within the next week and end the call.
 - If the user is not interested in participating in the study, thank them for their time and end the call.
 - Do not `hang_up` before getting user confirmation for all of the information from the form.
-- Only `hang_up` after the user says goodbye.
+- Only `hang_up` after saying goodbye.
 """
 
         tools = [
@@ -99,12 +109,49 @@ class AiSessionConfiguration(BaseModel):
         )
 
 
+class AiMessageMetadataEventTypes(str, Enum):
+    speaker = "speaker"
+    call_end = "call_end"
+
+
+class AiMessageQueues:
+    audio_queue: asyncio.Queue[str]
+    metadata_queue: asyncio.Queue[str]
+
+    def __init__(self):
+        self.audio_queue = asyncio.Queue()
+        self.metadata_queue = asyncio.Queue()
+
+    def add_audio(self, audio: str):
+        self.audio_queue.put_nowait(audio)
+
+    def add_metadata(
+        self,
+        event_type: AiMessageMetadataEventTypes,
+        event_data: Union[BaseModel, None, Sequence[BaseModel]],
+    ):
+        self.metadata_queue.put_nowait(
+            json.dumps(
+                {"type": event_type.value, "data": event_data},
+                default=pydantic_encoder,
+            )
+        )
+
+    def end_call(self):
+        self.audio_queue.put_nowait(CALL_END_EVENT)
+
+        self.add_metadata(
+            AiMessageMetadataEventTypes.call_end,
+            None,
+        )
+
+
 class AiCaller(AsyncContextManager["AiCaller"]):
     def __init__(
         self,
         user_info: dict,
         phone_call_id: SerializedUUID,
-        message_queues: dict[str, asyncio.Queue],
+        message_queues: AiMessageQueues,
         audio_format: AudioFormat = "g711_ulaw",
     ):
         self._exit_stack = AsyncExitStack()
@@ -123,6 +170,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self._audio_total_buffer_ms: int = 0
         self._audio_input_buffer: list[tuple[str, int, int]] = []
         self._user_speaking: bool = False
+        self._speaker_segments: list[SpeakerSegment] = []
 
     async def __aenter__(self) -> "AiCaller":
         self._ws_client = await self._exit_stack.enter_async_context(
@@ -173,6 +221,23 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         except Exception:
             logger.exception("Error writing to log file")
 
+    def _update_speaker_segments(self, speaker_segment: SpeakerSegment):
+        # check if the speaker segment exists in the list
+        found = False
+        for segment in self._speaker_segments:
+            if segment.item_id == speaker_segment.item_id:
+                segment.transcript = speaker_segment.transcript
+                found = True
+                break
+
+        if not found:
+            self._speaker_segments.append(speaker_segment)
+
+        self._message_queues.add_metadata(
+            AiMessageMetadataEventTypes.speaker,
+            self._speaker_segments,
+        )
+
     async def send_message(self, message: str) -> None:
         await self.client.send(message)
         task = asyncio.create_task(self._log_message(message))
@@ -205,7 +270,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         # either dump to streaming queue or input buffer
         if self._user_speaking:
             self._audio_total_buffer_ms += audio_ms
-            self._message_queues["audio_queue"].put_nowait(audio)
+            self._message_queues.add_audio(audio)
         else:
             self._audio_input_buffer.append(
                 (audio, audio_ms, self._audio_input_buffer_ms)
@@ -218,34 +283,60 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
         if response["type"] == "input_audio_buffer.speech_started":
             self._user_speaking = True
-            self._message_queues["speaker_queue"].put_nowait(
+            self._update_speaker_segments(
                 SpeakerSegment(
                     timestamp=self._audio_total_buffer_ms / 1000,
                     speaker=Speaker.user,
                     transcript="",
-                    item_id="",
-                ).model_dump_json()
+                    item_id=response["item_id"],
+                )
             )
             audio_start_ms = response["audio_start_ms"]
             for audio, individual_ms, ms in self._audio_input_buffer:
                 if ms >= audio_start_ms:
                     self._audio_total_buffer_ms += individual_ms
-                    self._message_queues["audio_queue"].put_nowait(audio)
+                    self._message_queues.add_audio(audio)
             self._audio_input_buffer = []
         elif response["type"] == "input_audio_buffer.speech_stopped":
             self._user_speaking = False
-            self._message_queues["speaker_queue"].put_nowait(
+            self._update_speaker_segments(
                 SpeakerSegment(
                     timestamp=self._audio_total_buffer_ms / 1000,
                     speaker=Speaker.assistant,
                     transcript="",
                     item_id="",
-                ).model_dump_json()
+                ),
             )
         elif response["type"] == "response.audio.delta":
             audio_ms = self._audio_ms(response["delta"])
             self._audio_total_buffer_ms += audio_ms
-            self._message_queues["audio_queue"].put_nowait(response["delta"])
+            self._message_queues.add_audio(response["delta"])
+            if (
+                len(self._speaker_segments) > 0
+                and self._speaker_segments[-1].item_id == ""
+            ):
+                self._speaker_segments[-1].item_id = response["item_id"]
+        elif (
+            response["type"]
+            == "conversation.item.input_audio_transcription.completed"
+        ):
+            self._update_speaker_segments(
+                SpeakerSegment(
+                    timestamp=0,  # this value is not used
+                    speaker=Speaker.user,
+                    transcript=response["transcript"],
+                    item_id=response["item_id"],
+                ),
+            )
+        elif response["type"] == "response.audio_transcript.done":
+            self._update_speaker_segments(
+                SpeakerSegment(
+                    timestamp=0,  # this value is not used
+                    speaker=Speaker.assistant,
+                    transcript=response["transcript"],
+                    item_id=response["item_id"],
+                ),
+            )
 
         return response
 
@@ -259,8 +350,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             await self._ws_client.close()
 
         # close the queues
-        for queue in self._message_queues.values():
-            queue.put_nowait("END")
+        self._message_queues.end_call()
 
         if len(self._log_tasks) > 0:
             logger.info(f"Flushing {len(self._log_tasks)} log tasks")

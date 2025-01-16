@@ -4,7 +4,7 @@ import logging
 
 import numpy as np
 
-from src.clinicontact_types import BarHeight, Speaker, SpeakerSegment
+from src.helixion_types import BarHeight, Speaker, SpeakerSegment
 
 logger = logging.getLogger(__name__)
 

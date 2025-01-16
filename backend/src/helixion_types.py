@@ -5,6 +5,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, PlainSerializer, model_serializer
 
+AUDIO_QUEUE_NAME = "audio_queue"
+METADATA_QUEUE_NAME = "metadata_queue"
+CALL_END_EVENT = "END"
+
+
 SerializedUUID = Annotated[
     UUID, PlainSerializer(lambda x: str(x), return_type=str)
 ]

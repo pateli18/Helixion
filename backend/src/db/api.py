@@ -4,9 +4,9 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import selectinload
 
-from src.clinicontact_types import SerializedUUID
 from src.db.models import PhoneCallModel
 from src.db.models.PhoneCall import PhoneCallEventModel
+from src.helixion_types import SerializedUUID
 
 logger = logging.getLogger(__name__)
 

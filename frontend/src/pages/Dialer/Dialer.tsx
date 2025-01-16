@@ -24,7 +24,7 @@ const CallPhoneNumber = (props: {
   };
 
   const onClick = async () => {
-    if (phoneNumber) {
+    if (phoneNumber && isValidPhoneNumber) {
       setIsCalling(true);
       await props.handleCallPhoneNumber(phoneNumber);
       setIsCalling(false);
@@ -48,6 +48,11 @@ const CallPhoneNumber = (props: {
           onChange={(e) => {
             setPhoneNumber(e.target.value);
             setIsValidPhoneNumber(validatePhoneNumber(e.target.value));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              onClick();
+            }
           }}
           className={cn(
             "max-w-[600px]",

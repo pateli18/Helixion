@@ -1,11 +1,11 @@
 from typing import cast
 
-from src.clinicontact_types import (
+from src.db.models import PhoneCallModel
+from src.helixion_types import (
     PhoneCallMetadata,
     PhoneCallStatus,
     SerializedUUID,
 )
-from src.db.models import PhoneCallModel
 
 
 def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:

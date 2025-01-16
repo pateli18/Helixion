@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Response
 from pydantic import BaseModel
 
 from src.ai import AiSessionConfiguration, S3Client
-from src.clinicontact_types import ModelType
+from src.helixion_types import ModelType
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
