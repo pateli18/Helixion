@@ -10,7 +10,7 @@ export const AudioPlayer = (props: {
   audioRef: MutableRefObject<HTMLAudioElement | null>;
   speakerSegments: SpeakerSegment[];
   barHeights: BarHeight[];
-  currentSegment: MutableRefObject<SpeakerSegment | null>;
+  setCurrentSegment: (segment: SpeakerSegment | null) => void;
   totalDuration: number;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,11 +24,11 @@ export const AudioPlayer = (props: {
     );
     for (let i = sortedSegments.length - 1; i >= 0; i--) {
       if (time >= sortedSegments[i].timestamp) {
-        props.currentSegment.current = sortedSegments[i];
+        props.setCurrentSegment(sortedSegments[i]);
         return;
       }
     }
-    props.currentSegment.current = sortedSegments[0];
+    props.setCurrentSegment(sortedSegments[0]);
   };
 
   const handlePlayPause = () => {

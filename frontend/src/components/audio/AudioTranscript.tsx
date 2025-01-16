@@ -8,7 +8,7 @@ import { Badge } from "../ui/badge";
 const SegmentDisplay = (props: {
   segment: SpeakerSegment;
   audioRef?: MutableRefObject<HTMLAudioElement | null>;
-  currentSegment: MutableRefObject<SpeakerSegment | null>;
+  currentSegment: SpeakerSegment | null;
 }) => {
   const handleTimeClick = () => {
     if (props.audioRef && props.audioRef.current) {
@@ -17,7 +17,7 @@ const SegmentDisplay = (props: {
   };
 
   const isCurrentSegment =
-    props.currentSegment.current?.item_id === props.segment.item_id;
+    props.currentSegment?.item_id === props.segment.item_id;
 
   return (
     <div
@@ -42,7 +42,7 @@ const SegmentDisplay = (props: {
 export const AudioTranscriptDisplay = (props: {
   segments: SpeakerSegment[];
   audioRef?: MutableRefObject<HTMLAudioElement | null>;
-  currentSegment: MutableRefObject<SpeakerSegment | null>;
+  currentSegment: SpeakerSegment | null;
 }) => {
   return (
     <div className="space-y-2">

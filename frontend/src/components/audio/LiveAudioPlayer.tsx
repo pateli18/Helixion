@@ -1,5 +1,5 @@
 import { BarHeight, SpeakerSegment } from "@/types";
-import { useEffect, useRef, useState } from "react";
+import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { calculatedBars } from "./visualizationUtils";
 import { Button } from "../ui/button";
 import { formatTime } from "@/utils/dateFormat";
@@ -9,6 +9,7 @@ export const LiveAudioPlayer = (props: {
   audioRef: React.RefObject<HTMLAudioElement>;
   audioUrl: string;
   speakerSegments?: SpeakerSegment[];
+  setCurrentSegment: (segment: SpeakerSegment | null) => void;
   handleHangUp: () => void;
   callEnded: boolean;
 }) => {
@@ -61,6 +62,7 @@ export const LiveAudioPlayer = (props: {
       const relevantSpeakerSegment = speakerSegmentsRef.current?.findLast(
         (segment) => segment.timestamp <= currentTime
       );
+      props.setCurrentSegment(relevantSpeakerSegment ?? null);
 
       // Clear the canvas before redrawing
       canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
