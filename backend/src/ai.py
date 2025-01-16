@@ -52,8 +52,15 @@ def format_user_info(user_info: dict) -> str:
     return user_info_fmt
 
 
+class TurnDetection(BaseModel):
+    type: Literal["server_vad"] = "server_vad"
+    threshold: float = 0.5  # 0-1, higher is for noisier audio
+    prefix_padding_ms: int = 300
+    silence_duration_ms: int = 500
+
+
 class AiSessionConfiguration(BaseModel):
-    turn_detection: Optional[dict]
+    turn_detection: Optional[TurnDetection]
     input_audio_format: Optional[AudioFormat]
     output_audio_format: Optional[AudioFormat]
     voice: Optional[Voice]
@@ -97,7 +104,7 @@ class AiSessionConfiguration(BaseModel):
         ]
 
         return cls(
-            turn_detection={"type": "server_vad"},
+            turn_detection=TurnDetection(),
             input_audio_format=audio_format,
             output_audio_format=audio_format,
             voice="shimmer",
@@ -165,7 +172,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self._phone_call_id = phone_call_id
         self._message_queues = message_queues
         self._audio_input_buffer_ms: int = (
-            300  # start with default prefix_padding
+            self.session_configuration.turn_detection.prefix_padding_ms
+            if self.session_configuration.turn_detection
+            else 0
         )
         self._audio_total_buffer_ms: int = 0
         self._audio_input_buffer: list[tuple[str, int, int]] = []

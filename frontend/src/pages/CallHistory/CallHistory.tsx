@@ -1,4 +1,4 @@
-import { DataTable } from "@/components/Table";
+import { DataTable } from "@/components/table/Table";
 import {
   Tooltip,
   TooltipContent,
@@ -15,6 +15,9 @@ import { LoadingView } from "@/components/Loader";
 import { Layout } from "@/components/Layout";
 import { formatDuration, loadAndFormatDate } from "@/utils/dateFormat";
 import { CallDisplay } from "@/components/CallDisplay";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { SearchFilter, SelectFilter } from "@/components/table/SelectFilter";
 
 const ClickToCopy = forwardRef<
   HTMLDivElement,
@@ -71,6 +74,13 @@ const StatusBadge = (props: { status: PhoneCallStatus }) => {
 };
 
 export const CallHistoryPage = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [audioAvailableOnly, setAudioAvailableOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [fromPhoneNumberFilter, setFromPhoneNumberFilter] = useState<string[]>(
+    []
+  );
+  const [toPhoneNumberFilter, setToPhoneNumberFilter] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [callHistory, setCallHistory] = useState<PhoneCallMetadata[]>([]);
   const [selectedCall, setSelectedCall] = useState<PhoneCallMetadata | null>(
@@ -208,12 +218,110 @@ export const CallHistoryPage = () => {
     },
   ];
 
+  const filteredSearchData = callHistory.filter((call) => {
+    return (
+      JSON.stringify(call.input_data).includes(searchTerm.trim()) ||
+      !searchTerm.trim()
+    );
+  });
+
+  const statusCounts = filteredSearchData.reduce(
+    (acc, call) => {
+      acc[call.status] = (acc[call.status] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  const filteredStatusData = filteredSearchData.filter((call) => {
+    return statusFilter.includes(call.status) || statusFilter.length === 0;
+  });
+
+  const fromPhoneNumberCounts = filteredStatusData.reduce(
+    (acc, call) => {
+      acc[call.from_phone_number] = (acc[call.from_phone_number] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  const filteredFromPhoneNumberData = filteredStatusData.filter((call) => {
+    return (
+      fromPhoneNumberFilter.includes(call.from_phone_number) ||
+      fromPhoneNumberFilter.length === 0
+    );
+  });
+
+  const toPhoneNumberCounts = filteredFromPhoneNumberData.reduce(
+    (acc, call) => {
+      acc[call.to_phone_number] = (acc[call.to_phone_number] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  const filteredToPhoneNumberData = filteredFromPhoneNumberData.filter(
+    (call) => {
+      return (
+        toPhoneNumberFilter.includes(call.to_phone_number) ||
+        toPhoneNumberFilter.length === 0
+      );
+    }
+  );
+
+  const filteredAudioAvailableOnlyData = filteredToPhoneNumberData.filter(
+    (call) => {
+      return call.recording_available || !audioAvailableOnly;
+    }
+  );
+
   return (
     <Layout title="Call History">
       {isLoading ? (
         <LoadingView text="Loading call history..." />
       ) : (
-        <DataTable data={callHistory} columns={columns} />
+        <>
+          <div className="flex items-center justify-between">
+            <div className="text-md text-muted-foreground">
+              {filteredAudioAvailableOnlyData.length} calls
+            </div>
+            <div className="flex items-center space-x-2">
+              <SearchFilter
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search Input Data..."
+                className={cn("w-[200px]")}
+              />
+              <SelectFilter
+                title="Status"
+                filterCounts={statusCounts}
+                activeFilter={statusFilter}
+                setActiveFilter={setStatusFilter}
+              />
+              <SelectFilter
+                title="From Phone Number"
+                filterCounts={fromPhoneNumberCounts}
+                activeFilter={fromPhoneNumberFilter}
+                setActiveFilter={setFromPhoneNumberFilter}
+              />
+              <SelectFilter
+                title="To Phone Number"
+                filterCounts={toPhoneNumberCounts}
+                activeFilter={toPhoneNumberFilter}
+                setActiveFilter={setToPhoneNumberFilter}
+              />
+              <Label htmlFor="audio-available-only">Audio Available</Label>
+              <Switch
+                id="audio-available-only"
+                checked={audioAvailableOnly}
+                onCheckedChange={(checked) => {
+                  setAudioAvailableOnly(checked);
+                }}
+              />
+            </div>
+          </div>
+          <DataTable data={filteredAudioAvailableOnlyData} columns={columns} />
+        </>
       )}
       <CallDisplay call={selectedCall} setCall={setSelectedCall} />
     </Layout>
