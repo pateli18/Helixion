@@ -128,7 +128,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         user_info: dict,
         system_prompt: str,
         phone_call_id: SerializedUUID,
-        message_queues: AiMessageQueues,
+        message_queues: Optional[AiMessageQueues],
         audio_format: AudioFormat = "g711_ulaw",
     ):
         self._exit_stack = AsyncExitStack()
@@ -137,6 +137,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self.session_configuration = AiSessionConfiguration.default(
             system_prompt, user_info, audio_format, True
         )
+        self._sampling_rate = 24000 if audio_format == "pcm16" else 8000
         self._log_tasks: list[asyncio.Task] = []
         self._cleanup_started = False
         self._phone_call_id = phone_call_id
@@ -212,10 +213,11 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         if not found:
             self._speaker_segments.append(speaker_segment)
 
-        self._message_queues.add_metadata(
-            AiMessageMetadataEventTypes.speaker,
-            self._speaker_segments,
-        )
+        if self._message_queues is not None:
+            self._message_queues.add_metadata(
+                AiMessageMetadataEventTypes.speaker,
+                self._speaker_segments,
+            )
 
     async def send_message(self, message: str) -> None:
         await self.client.send(message)
@@ -233,7 +235,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
     def _audio_ms(self, audio_b64: str) -> int:
         audio_bytes = base64.b64decode(audio_b64)
-        return len(audio_bytes) // 8
+        return int((len(audio_bytes) / 2) * 1000 / self._sampling_rate)
 
     async def receive_human_audio(self, audio: str):
         audio_append = {
@@ -249,7 +251,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         # either dump to streaming queue or input buffer
         if self._user_speaking:
             self._audio_total_buffer_ms += audio_ms
-            self._message_queues.add_audio(audio)
+            if self._message_queues is not None:
+                self._message_queues.add_audio(audio)
         else:
             self._audio_input_buffer.append(
                 (audio, audio_ms, self._audio_input_buffer_ms)
@@ -274,7 +277,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             for audio, individual_ms, ms in self._audio_input_buffer:
                 if ms >= audio_start_ms:
                     self._audio_total_buffer_ms += individual_ms
-                    self._message_queues.add_audio(audio)
+                    if self._message_queues is not None:
+                        self._message_queues.add_audio(audio)
             self._audio_input_buffer = []
         elif response["type"] == "input_audio_buffer.speech_stopped":
             self._user_speaking = False
@@ -288,8 +292,10 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             )
         elif response["type"] == "response.audio.delta":
             audio_ms = self._audio_ms(response["delta"])
+            response["audio_ms"] = audio_ms  # add so that caller can use
             self._audio_total_buffer_ms += audio_ms
-            self._message_queues.add_audio(response["delta"])
+            if self._message_queues is not None:
+                self._message_queues.add_audio(response["delta"])
             if (
                 len(self._speaker_segments) > 0
                 and self._speaker_segments[-1].item_id == ""
@@ -329,7 +335,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             await self._ws_client.close()
 
         # close the queues
-        self._message_queues.end_call()
+        if self._message_queues is not None:
+            self._message_queues.end_call()
 
         if len(self._log_tasks) > 0:
             logger.info(f"Flushing {len(self._log_tasks)} log tasks")

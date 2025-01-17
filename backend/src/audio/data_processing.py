@@ -11,13 +11,14 @@ logger = logging.getLogger(__name__)
 
 def process_audio_data(
     file_bytes: bytes,
+    sample_rate: int,
 ) -> tuple[list[SpeakerSegment], bytearray]:
     file_str = file_bytes.decode("utf-8")
     speaker_segments: list[SpeakerSegment] = []
     total_ms = 0
     input_data_ms = 300
     user_speaking = False
-    input_buffer_data: list[tuple[bytes, int]] = []
+    input_buffer_data: list[tuple[bytes, float]] = []
     audio_data = bytearray()
     for line in file_str.splitlines():
         # exlcude timestamp
@@ -36,7 +37,7 @@ def process_audio_data(
             for decoded_data, ms in input_buffer_data:
                 if ms >= audio_start_ms:
                     audio_data.extend(decoded_data)
-                    total_ms += len(decoded_data) // 8
+                    total_ms += (len(decoded_data) / 2) * 1000.0 / sample_rate
 
         elif (
             line_data["type"]
@@ -64,7 +65,7 @@ def process_audio_data(
         elif line_data["type"] == "response.audio.delta":
             decoded_data = base64.b64decode(line_data["delta"])
             audio_data.extend(decoded_data)
-            total_ms += len(decoded_data) // 8
+            total_ms += (len(decoded_data) / 2) * 1000.0 / sample_rate
 
             # check if the latest speaker does not have an item_id, if not, add one
             if len(speaker_segments) == 0:
@@ -100,7 +101,7 @@ def process_audio_data(
         elif line_data["type"] == "input_audio_buffer.append":
             audio = line_data["audio"]
             decoded_data = base64.b64decode(audio)
-            decoded_data_ms = len(decoded_data) // 8
+            decoded_data_ms = (len(decoded_data) / 2) * 1000.0 / sample_rate
             input_data_ms += decoded_data_ms
             if user_speaking:
                 total_ms += decoded_data_ms
@@ -112,7 +113,10 @@ def process_audio_data(
 
 
 def calculate_bar_heights(
-    pcm_data: bytes, num_bars: int, speaker_segments: list[SpeakerSegment]
+    pcm_data: bytes,
+    num_bars: int,
+    speaker_segments: list[SpeakerSegment],
+    sample_rate: int,
 ) -> list[BarHeight]:
     # Convert bytes to numpy array of 16-bit integers
     samples = np.frombuffer(pcm_data, dtype=np.int16)
@@ -131,7 +135,7 @@ def calculate_bar_heights(
     normalized_heights = rms / (max_value * 1.3) if max_value > 0 else rms
 
     # Calculate timestamp for each bar using numpy
-    samples_per_ms = 8
+    samples_per_ms = sample_rate / 1000
     ms_per_bar = samples_per_bar / samples_per_ms
     bar_timestamps = np.arange(num_bars) * ms_per_bar / 1000
 

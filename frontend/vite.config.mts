@@ -34,7 +34,11 @@ if (build) {
     open: "http://localhost:3000/",
     // this is required to avoid CORS requests
     proxy: {
-      "/api": "http://localhost:8000/",
+      "/api": {
+        target: "http://localhost:8000/",
+        ws: true,
+        changeOrigin: true,
+      },
     },
   };
 }

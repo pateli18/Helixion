@@ -6,52 +6,6 @@ if (import.meta.env.VITE_ENV === "prod") {
   baseUrl = "https://api.helixion.ai";
 }
 
-export const createSession = async (
-  agentId: string,
-  userInfo: Record<string, string>
-) => {
-  let response = null;
-  try {
-    response = await Ajax.req<{
-      id: string;
-      value: string;
-      expires_at: number;
-    }>({
-      url: `${baseUrl}/api/v1/browser/create-session`,
-      method: "POST",
-      body: {
-        agent_id: agentId,
-        user_info: userInfo,
-      },
-    });
-  } catch (error) {
-    console.error(error);
-  }
-  return response;
-};
-
-export const storeSession = async (
-  sessionId: string,
-  data: Record<string, string>[],
-  originalUserInfo: Record<string, string>
-) => {
-  let response = null;
-  try {
-    response = await Ajax.req<Record<string, string>>({
-      url: `${baseUrl}/api/v1/browser/store-session`,
-      method: "POST",
-      body: {
-        session_id: sessionId,
-        data,
-        original_user_info: originalUserInfo,
-      },
-    });
-  } catch (error) {
-    console.error(error);
-  }
-  return response;
-};
-
 export const outboundCall = async (
   phoneNumber: string,
   agentId: string,
@@ -64,6 +18,26 @@ export const outboundCall = async (
       method: "POST",
       body: {
         phone_number: phoneNumber,
+        agent_id: agentId,
+        user_info: userInfo,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const browserCall = async (
+  agentId: string,
+  userInfo: Record<string, string>
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<{ phone_call_id: string }>({
+      url: `${baseUrl}/api/v1/browser/call`,
+      method: "POST",
+      body: {
         agent_id: agentId,
         user_info: userInfo,
       },
@@ -143,6 +117,13 @@ export const getPlayAudioUrl = (phoneCallId: string) => {
 
 export const getAudioStreamUrl = (phoneCallId: string) => {
   return `${baseUrl}/api/v1/phone/stream-audio/${phoneCallId}`;
+};
+
+export const getBrowserCallUrl = (phoneCallId: string) => {
+  return `${baseUrl}/api/v1/browser/call-stream/${phoneCallId}`.replace(
+    "http",
+    "ws"
+  );
 };
 
 export const getAgents = async () => {

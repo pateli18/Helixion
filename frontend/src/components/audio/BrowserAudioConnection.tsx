@@ -1,181 +1,224 @@
-import { createSession, storeSession } from "@/utils/apiCalls";
-import { ReloadIcon } from "@radix-ui/react-icons";
+import { browserCall, getBrowserCallUrl } from "@/utils/apiCalls";
 import { useEffect } from "react";
 import { useRef } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
+import { ReloadIcon } from "@radix-ui/react-icons";
 
 export const BrowserAudioConnection = (props: {
   agentId: string;
   userInfo: Record<string, string>;
 }) => {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const [connectionLoading, setConnectionLoading] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [settingUpSession, setSettingUpSession] = useState(false);
-  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
-  const sessionData = useRef<Record<string, string>[]>([]);
-  const sessionId = useRef<string | null>(null);
-  const peerConnection = useRef<RTCPeerConnection | null>(null);
-  const pendingAudio = useRef<boolean>(false);
-  const hangUpRequested = useRef<boolean>(false);
 
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.addEventListener("playing", () => {
-        pendingAudio.current = true;
-      });
+  const websocketRef = useRef<WebSocket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const inputWorkletRef = useRef<AudioWorkletNode | null>(null);
+  const outputWorkletRef = useRef<AudioWorkletNode | null>(null);
 
-      audioRef.current.addEventListener("ended", () => {
-        pendingAudio.current = false;
-      });
-
-      // Also handle audio stall/suspend cases
-      audioRef.current.addEventListener("stalled", () => {
-        pendingAudio.current = false;
-      });
-
-      audioRef.current.addEventListener("suspend", () => {
-        pendingAudio.current = false;
-      });
-    }
-  }, []);
-
-  const startSession = async () => {
-    setSettingUpSession(true);
-    // Get an ephemeral key from the Fastify server
-    const tokenResponse = await createSession(props.agentId, props.userInfo);
-    if (!tokenResponse) {
-      setSettingUpSession(false);
-      toast.error("Failed to start call, please try again");
-      return;
-    }
-    const EPHEMERAL_KEY = tokenResponse.value;
-    sessionId.current = tokenResponse.id;
-    // Create a peer connection
-    const pc = new RTCPeerConnection();
-
-    // Set up to play remote audio from the model
-    pc.ontrack = (e) => {
-      if (audioRef.current) {
-        audioRef.current.srcObject = e.streams[0];
-      }
-    };
-
-    // Add local audio track for microphone input in the browser
-    const ms = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
-    pc.addTrack(ms.getTracks()[0]);
-
-    // Set up data channel for sending and receiving events
-    const dc = pc.createDataChannel("oai-events");
-    setDataChannel(dc);
-
-    // Start the session using the Session Description Protocol (SDP)
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    const sdpResponse = await fetch(
-      `https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`,
-      {
-        method: "POST",
-        body: offer.sdp,
-        headers: {
-          Authorization: `Bearer ${EPHEMERAL_KEY}`,
-          "Content-Type": "application/sdp",
-        },
-      }
-    );
-
-    const answer = {
-      type: "answer" as const,
-      sdp: await sdpResponse.text(),
-    };
-    await pc.setRemoteDescription(answer);
-
-    peerConnection.current = pc;
-  };
-
-  const performStop = async () => {
-    if (dataChannel) {
-      dataChannel.close();
-    }
-    if (peerConnection.current) {
-      peerConnection.current.close();
+  const cleanup = () => {
+    if (websocketRef.current?.readyState === WebSocket.OPEN) {
+      websocketRef.current.close();
     }
 
-    if (sessionId.current && sessionData.current.length > 0) {
-      await storeSession(
-        sessionId.current,
-        sessionData.current,
-        props.userInfo
-      );
+    // Clean up media stream tracks
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
-    setDataChannel(null);
-    peerConnection.current = null;
-    sessionId.current = null;
-    sessionData.current = [];
+    if (audioContextRef.current?.state !== "closed") {
+      audioContextRef.current?.close();
+    }
+
+    if (inputWorkletRef.current) {
+      inputWorkletRef.current = null;
+    }
+
+    if (outputWorkletRef.current) {
+      outputWorkletRef.current = null;
+    }
+
     setIsSessionActive(false);
   };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, []);
 
-  const startCleanupCheck = () => {
-    const checkInterval = setInterval(() => {
-      if (!pendingAudio.current && !hangUpRequested.current) {
-        clearInterval(checkInterval);
-        performStop();
+  const connectWebSocket = (phoneCallId: string) => {
+    const ws = new WebSocket(getBrowserCallUrl(phoneCallId));
+
+    ws.onopen = () => {
+      setIsSessionActive(true);
+      websocketRef.current?.send(
+        JSON.stringify({
+          event: "start",
+        })
+      );
+    };
+
+    ws.onclose = () => {
+      setIsSessionActive(false);
+    };
+
+    ws.onerror = (e) => {
+      console.error("WebSocket connection error", e);
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        // parse json
+        const data = JSON.parse(event.data);
+
+        if (data.event === "clear") {
+          outputWorkletRef.current?.port.postMessage({
+            type: "clear-buffers",
+          });
+        } else if (data.event === "media") {
+          const pcm16Data = atob(data.payload); // base64 -> binary string
+
+          // Step 1: Create an ArrayBuffer & corresponding view
+          const buffer = new ArrayBuffer(pcm16Data.length);
+          const view = new Uint8Array(buffer);
+
+          // Step 2: Copy each character’s byte into our Uint8Array
+          for (let i = 0; i < pcm16Data.length; i++) {
+            view[i] = pcm16Data.charCodeAt(i);
+          }
+
+          // Step 3: Now interpret that ArrayBuffer as 16-bit signed samples
+          const pcm16Array = new Int16Array(buffer);
+
+          // Step 4: Convert to Float32 samples in the [-1.0, 1.0] range
+          const float32Data = new Float32Array(pcm16Array.length);
+          for (let i = 0; i < pcm16Array.length; i++) {
+            float32Data[i] = pcm16Array[i] / 32768.0;
+          }
+
+          // post buffer to output worklet
+          outputWorkletRef.current?.port.postMessage({
+            type: "push-buffer",
+            payload: float32Data,
+          });
+        }
+      } catch (err) {
+        console.error("Error processing server event:", err);
       }
-    }, 100);
+    };
 
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      performStop();
-    }, 15000);
+    websocketRef.current = ws;
   };
 
-  // Attach event listeners to the data channel when a new one is created
-  useEffect(() => {
-    if (dataChannel) {
-      // Append new server events to the list
-      dataChannel.addEventListener("message", (e) => {
-        const event = JSON.parse(e.data);
-        sessionData.current.push(event);
-        if (
-          event.type === "response.function_call_arguments.done" &&
-          event.name === "hang_up"
-        ) {
-          hangUpRequested.current = true;
-          startCleanupCheck();
-        }
+  // Handle recording start/stop
+  const startCall = async () => {
+    setConnectionLoading(true);
+    try {
+      const response = await browserCall(props.agentId, props.userInfo);
+      if (response === null) {
+        throw new Error("Failed to start call");
+      }
+
+      cleanup();
+
+      // setup audio context
+      audioContextRef.current = new AudioContext({
+        latencyHint: "interactive",
+        sampleRate: 24000,
       });
 
-      // Set session active when the data channel is opened
-      dataChannel.addEventListener("open", () => {
-        setIsSessionActive(true);
-        setSettingUpSession(false);
+      // setup mic stream
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 24000,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
+
+      // create the mic source
+      const micSource = audioContextRef.current!.createMediaStreamSource(
+        streamRef.current!
+      );
+
+      // load input worklet
+      await audioContextRef.current!.audioWorklet.addModule(
+        "pcm-input-processor.js"
+      );
+      inputWorkletRef.current = new AudioWorkletNode(
+        audioContextRef.current!,
+        "pcm-input-processor"
+      );
+
+      inputWorkletRef.current.port.onmessage = (event) => {
+        if (event.data.type === "mic-data") {
+          const pcmData = new Int16Array(event.data.buffer);
+          const pcmBytes = new Uint8Array(pcmData.buffer);
+          const base64Data = btoa(String.fromCharCode(...pcmBytes));
+
+          websocketRef.current?.send(
+            JSON.stringify({
+              event: "media",
+              payload: base64Data,
+            })
+          );
+        }
+      };
+
+      // connect microphone to pcm processor
+      micSource.connect(inputWorkletRef.current!);
+
+      // load output worklet
+      await audioContextRef.current!.audioWorklet.addModule(
+        "pcm-output-processor.js"
+      );
+      outputWorkletRef.current = new AudioWorkletNode(
+        audioContextRef.current!,
+        "pcm-output-processor"
+      );
+
+      outputWorkletRef.current.port.onmessage = (e) => {
+        if (e.data?.type === "chunkEnd") {
+          websocketRef.current?.send(JSON.stringify({ event: "mark" }));
+        }
+      };
+
+      // connect pcm processor to websocket
+      outputWorkletRef.current.connect(audioContextRef.current!.destination);
+
+      connectWebSocket(response.phone_call_id);
+    } catch (err) {
+      console.error("Error starting call", err);
+      toast.error("Error starting call, please try again");
+      cleanup();
+    } finally {
+      setConnectionLoading(false);
     }
-  }, [dataChannel]);
+  };
 
   return (
     <div className="flex justify-end">
       <Button
         onClick={() => {
           if (isSessionActive) {
-            performStop();
+            cleanup();
           } else {
-            startSession();
+            startCall();
           }
         }}
         variant={isSessionActive ? "destructive" : "default"}
       >
         {isSessionActive ? "Hang Up" : "Test Call"}
-        {settingUpSession && (
-          <ReloadIcon className="animate-spin ml-2 h-4 w-4" />
-        )}
+        {connectionLoading && <ReloadIcon className="w-4 h-4 animate-spin" />}
       </Button>
-      <audio ref={audioRef} autoPlay className="hidden" />
     </div>
   );
 };

@@ -23,7 +23,7 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
 from src.ai.caller import AiCaller, AiMessageQueues
-from src.audio.call_router import CallRouter
+from src.audio.audio_router import CallRouter
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
 from src.db.api import (
@@ -35,6 +35,7 @@ from src.db.api import (
 from src.db.base import get_session
 from src.db.converter import convert_phone_call_model
 from src.helixion_types import (
+    BROWSER_NAME,
     CALL_END_EVENT,
     BarHeight,
     PhoneCallMetadata,
@@ -49,7 +50,7 @@ twilio_request_validator = RequestValidator(settings.twilio_auth_token)
 audio_cache_lock = asyncio.Lock()
 audio_cache: LRUCache[
     SerializedUUID,
-    tuple[list[SpeakerSegment], bytes, list[BarHeight]],
+    tuple[list[SpeakerSegment], bytes, list[BarHeight], int],
 ] = LRUCache(maxsize=50)
 
 logger = logging.getLogger(__name__)
@@ -149,7 +150,7 @@ async def call_stream(
         raise HTTPException(status_code=404, detail="Phone call not found")
     await websocket.accept()
     async with AiCaller(
-        user_info=phone_call.user_info,
+        user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
         message_queues=call_messages[phone_call_id],
@@ -254,7 +255,7 @@ async def get_call_history(
 async def _process_audio_data(
     phone_call_id: SerializedUUID,
     db: async_scoped_session,
-) -> tuple[list[SpeakerSegment], bytes, list[BarHeight]]:
+) -> tuple[list[SpeakerSegment], bytes, list[BarHeight], int]:
     data = audio_cache.get(phone_call_id)
     if data is None:
         phone_call = await get_phone_call(phone_call_id, db)
@@ -264,18 +265,29 @@ async def _process_audio_data(
             audio_data_raw, _, _ = await s3.download_file(
                 cast(str, phone_call.call_data)
             )
-        speaker_segments, audio_data = process_audio_data(audio_data_raw)
-        pcm_data = audioop.ulaw2lin(audio_data, 2)
-        bar_heights = calculate_bar_heights(pcm_data, 50, speaker_segments)
+        sample_rate = (
+            8000
+            if cast(str, phone_call.from_phone_number) != BROWSER_NAME
+            else 24000
+        )
+        speaker_segments, audio_data = process_audio_data(
+            audio_data_raw, sample_rate
+        )
+        if sample_rate == 8000:
+            audio_data = audioop.ulaw2lin(audio_data, 2)
+        bar_heights = calculate_bar_heights(
+            audio_data, 50, speaker_segments, sample_rate
+        )
         async with audio_cache_lock:
             audio_cache[phone_call_id] = (
                 speaker_segments,
-                pcm_data,
+                audio_data,
                 bar_heights,
+                sample_rate,
             )
     else:
-        speaker_segments, pcm_data, bar_heights = data
-    return speaker_segments, pcm_data, bar_heights
+        speaker_segments, audio_data, bar_heights, sample_rate = data
+    return speaker_segments, audio_data, bar_heights, sample_rate
 
 
 class AudioTranscriptResponse(BaseModel):
@@ -291,13 +303,13 @@ async def get_audio_transcript(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
 ):
-    speaker_segments, pcm_data, bar_heights = await _process_audio_data(
-        phone_call_id, db
+    speaker_segments, pcm_data, bar_heights, sample_rate = (
+        await _process_audio_data(phone_call_id, db)
     )
     return AudioTranscriptResponse(
         speaker_segments=speaker_segments,
         bar_heights=bar_heights,
-        total_duration=len(pcm_data) / 2 / 8000,
+        total_duration=len(pcm_data) / 2 / sample_rate,
     )
 
 
@@ -307,14 +319,16 @@ async def play_audio(
     request: Request,
     db: async_scoped_session = Depends(get_session),
 ):
-    _, audio_data, _ = await _process_audio_data(phone_call_id, db)
+    _, audio_data, _, sample_rate = await _process_audio_data(
+        phone_call_id, db
+    )
 
     # Create WAV header
     wav_buffer = io.BytesIO()
     with wave.open(wav_buffer, "wb") as wav_file:
         wav_file.setnchannels(1)
         wav_file.setsampwidth(2)
-        wav_file.setframerate(8000)
+        wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio_data)
 
     full_audio = wav_buffer.getvalue()

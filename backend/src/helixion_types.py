@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, PlainSerializer, model_serializer
 AUDIO_QUEUE_NAME = "audio_queue"
 METADATA_QUEUE_NAME = "metadata_queue"
 CALL_END_EVENT = "END"
+BROWSER_NAME = "browser"
 AudioFormat = Literal["pcm16", "g711_ulaw", "g711_alaw"]
 Voice = Literal[
     "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"
