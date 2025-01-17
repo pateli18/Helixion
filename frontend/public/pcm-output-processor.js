@@ -8,9 +8,19 @@ class PCMOutputProcessor extends AudioWorkletProcessor {
       // Listen for messages from the main thread
       this.port.onmessage = (event) => {
         const msg = event.data
-        if (msg?.type === 'push-buffer') {
-          // event.data.payload is a Float32Array
-          this.bufferQueue.push(msg.payload);
+        if (msg?.type === 'process-audio') {
+          const view = msg.payload;
+          
+          // Convert to 16-bit PCM
+          const pcm16Array = new Int16Array(view.buffer);
+          
+          // Convert to float32
+          const float32Data = new Float32Array(pcm16Array.length);
+          for (let i = 0; i < pcm16Array.length; i++) {
+            float32Data[i] = pcm16Array[i] / 32768.0;
+          }
+
+          this.bufferQueue.push(float32Data);
         } else if (msg?.type === 'clear-buffers') {
           // clear buffer queue
           this.bufferQueue = [];

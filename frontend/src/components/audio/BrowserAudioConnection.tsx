@@ -16,7 +16,6 @@ export const BrowserAudioConnection = (props: {
   const websocketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const inputWorkletRef = useRef<AudioWorkletNode | null>(null);
   const outputWorkletRef = useRef<AudioWorkletNode | null>(null);
 
@@ -82,31 +81,22 @@ export const BrowserAudioConnection = (props: {
             type: "clear-buffers",
           });
         } else if (data.event === "media") {
-          const pcm16Data = atob(data.payload); // base64 -> binary string
-
-          // Step 1: Create an ArrayBuffer & corresponding view
+          // Send the base64 data directly to the worklet for processing
+          const pcm16Data = atob(data.payload);
           const buffer = new ArrayBuffer(pcm16Data.length);
           const view = new Uint8Array(buffer);
 
-          // Step 2: Copy each character’s byte into our Uint8Array
           for (let i = 0; i < pcm16Data.length; i++) {
             view[i] = pcm16Data.charCodeAt(i);
           }
 
-          // Step 3: Now interpret that ArrayBuffer as 16-bit signed samples
-          const pcm16Array = new Int16Array(buffer);
-
-          // Step 4: Convert to Float32 samples in the [-1.0, 1.0] range
-          const float32Data = new Float32Array(pcm16Array.length);
-          for (let i = 0; i < pcm16Array.length; i++) {
-            float32Data[i] = pcm16Array[i] / 32768.0;
-          }
-
-          // post buffer to output worklet
-          outputWorkletRef.current?.port.postMessage({
-            type: "push-buffer",
-            payload: float32Data,
-          });
+          outputWorkletRef.current?.port.postMessage(
+            {
+              type: "process-audio",
+              payload: view,
+            },
+            [buffer]
+          );
         }
       } catch (err) {
         console.error("Error processing server event:", err);
