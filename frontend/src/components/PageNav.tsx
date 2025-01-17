@@ -60,7 +60,7 @@ export const PageSidebar = () => {
           <SidebarGroupLabel>Pages</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarItem icon={<PhoneIcon />} label="Dialer" href="/" />
+              <SidebarItem icon={<PhoneIcon />} label="Agent Tester" href="/" />
               <SidebarItem
                 icon={<ArchiveIcon />}
                 label="Call History"

@@ -2,7 +2,7 @@ import "./assets/index.css";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-import { PrimaryPage } from "./pages/Dialer/Dialer";
+import { AgentTestPage } from "./pages/AgentTest/AgentTest";
 import { ServicesProviderWrapper } from "./components/ServicesProviderWrapper";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -17,7 +17,7 @@ export const App = () => {
       <TooltipProvider delayDuration={0}>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<PrimaryPage />} />
+            <Route path="/" element={<AgentTestPage />} />
             <Route path="/call-history" element={<CallHistoryPage />} />
           </Routes>
           <Toaster richColors />

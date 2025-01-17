@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/button";
 
 export const BrowserAudioConnection = (props: {
+  agentId: string;
   userInfo: Record<string, string>;
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -43,7 +44,7 @@ export const BrowserAudioConnection = (props: {
   const startSession = async () => {
     setSettingUpSession(true);
     // Get an ephemeral key from the Fastify server
-    const tokenResponse = await createSession(props.userInfo);
+    const tokenResponse = await createSession(props.agentId, props.userInfo);
     if (!tokenResponse) {
       setSettingUpSession(false);
       toast.error("Failed to start call, please try again");

@@ -184,7 +184,6 @@ export const LiveCallDisplay = (props: {
     if (!props.phoneCallId) return;
     try {
       for await (const payload of streamMetadata(props.phoneCallId)) {
-        console.log(payload);
         if (payload.type === "call_end") {
           setCallEnded(true);
           break;

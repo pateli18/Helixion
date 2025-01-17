@@ -8,6 +8,7 @@ import { outboundCall } from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AgentConfiguration } from "./AgentConfiguration";
 
 const CallPhoneNumber = (props: {
   handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
@@ -31,11 +32,13 @@ const CallPhoneNumber = (props: {
     }
   };
 
+  console.log(phoneNumber);
+
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <Button
-          disabled={phoneNumber !== null && !isValidPhoneNumber && !isCalling}
+          disabled={phoneNumber === null || !isValidPhoneNumber || isCalling}
           onClick={onClick}
         >
           Call Phone Number{" "}
@@ -54,10 +57,7 @@ const CallPhoneNumber = (props: {
               onClick();
             }
           }}
-          className={cn(
-            "max-w-[600px]",
-            !isValidPhoneNumber && "border-red-500"
-          )}
+          className={cn("max-w-[600px]")}
         />
       </div>
       {!isValidPhoneNumber && phoneNumber && (
@@ -90,7 +90,12 @@ const SampleField = (props: {
   );
 };
 
-export const PrimaryPage = () => {
+const Dialer = (props: {
+  agentId: {
+    baseId: string;
+    versionId: string;
+  };
+}) => {
   const [name, setName] = useState("Joe Smith");
   const [email, setEmail] = useState("joe_smith@gmail.com");
   const [age, setAge] = useState("30");
@@ -98,7 +103,7 @@ export const PrimaryPage = () => {
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
 
   const handleCallPhoneNumber = async (phoneNumber: string) => {
-    const response = await outboundCall(phoneNumber, {
+    const response = await outboundCall(phoneNumber, props.agentId.versionId, {
       name,
       email,
       age,
@@ -112,29 +117,48 @@ export const PrimaryPage = () => {
   };
 
   return (
-    <Layout title="Dialer">
-      <div className="flex items-center justify-center">
-        <div className="space-y-4 px-4">
-          {phoneCallId === null && (
-            <BrowserAudioConnection userInfo={{ name, email, age, location }} />
-          )}
-          <div className="text-md text-gray-500">Enter Details</div>
-          <SampleField name="Name" value={name} setValue={setName} />
-          <SampleField name="Email" value={email} setValue={setEmail} />
-          <SampleField name="Age" value={age} setValue={setAge} />
-          <SampleField
-            name="Location"
-            value={location}
-            setValue={setLocation}
-          />
-          {phoneCallId === null && (
-            <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
-          )}
-          <LiveCallDisplay
-            phoneCallId={phoneCallId}
-            setPhoneCallId={setPhoneCallId}
-          />
-        </div>
+    <div className="space-y-4 px-4">
+      {phoneCallId === null && (
+        <BrowserAudioConnection
+          userInfo={{ name, email, age, location }}
+          agentId={props.agentId.versionId}
+        />
+      )}
+      <div className="text-md text-gray-500">Enter Details</div>
+      <SampleField name="Name" value={name} setValue={setName} />
+      <SampleField name="Email" value={email} setValue={setEmail} />
+      <SampleField name="Age" value={age} setValue={setAge} />
+      <SampleField name="Location" value={location} setValue={setLocation} />
+      {phoneCallId === null && (
+        <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+      )}
+      <LiveCallDisplay
+        phoneCallId={phoneCallId}
+        setPhoneCallId={setPhoneCallId}
+      />
+    </div>
+  );
+};
+
+export const AgentTestPage = () => {
+  const [agentId, setAgentId] = useState<{
+    baseId: string;
+    versionId: string;
+  } | null>(null);
+
+  return (
+    <Layout title="Agent Tester">
+      <div className="grid grid-cols-2 gap-4">
+        <AgentConfiguration agentId={agentId} setAgentId={setAgentId} />
+        {agentId === null ? (
+          <div className="flex items-center justify-center">
+            <div className="text-md text-gray-500">
+              Select an agent to start a call
+            </div>
+          </div>
+        ) : (
+          <Dialer agentId={agentId} />
+        )}
       </div>
     </Layout>
   );

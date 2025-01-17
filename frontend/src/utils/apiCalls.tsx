@@ -1,4 +1,4 @@
-import { BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
+import { Agent, BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
 import Ajax from "./Ajax";
 
 export let baseUrl = "";
@@ -6,7 +6,10 @@ if (import.meta.env.VITE_ENV === "prod") {
   baseUrl = "https://api.helixion.ai";
 }
 
-export const createSession = async (payload: Record<string, string>) => {
+export const createSession = async (
+  agentId: string,
+  userInfo: Record<string, string>
+) => {
   let response = null;
   try {
     response = await Ajax.req<{
@@ -16,7 +19,10 @@ export const createSession = async (payload: Record<string, string>) => {
     }>({
       url: `${baseUrl}/api/v1/browser/create-session`,
       method: "POST",
-      body: payload,
+      body: {
+        agent_id: agentId,
+        user_info: userInfo,
+      },
     });
   } catch (error) {
     console.error(error);
@@ -48,6 +54,7 @@ export const storeSession = async (
 
 export const outboundCall = async (
   phoneNumber: string,
+  agentId: string,
   userInfo: Record<string, string>
 ) => {
   let response = null;
@@ -57,6 +64,7 @@ export const outboundCall = async (
       method: "POST",
       body: {
         phone_number: phoneNumber,
+        agent_id: agentId,
         user_info: userInfo,
       },
     });
@@ -135,4 +143,57 @@ export const getPlayAudioUrl = (phoneCallId: string) => {
 
 export const getAudioStreamUrl = (phoneCallId: string) => {
   return `${baseUrl}/api/v1/phone/stream-audio/${phoneCallId}`;
+};
+
+export const getAgents = async () => {
+  let response = null;
+  try {
+    response = await Ajax.req<Agent[]>({
+      url: `${baseUrl}/api/v1/agent/all`,
+      method: "GET",
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const createNewAgentVersion = async (
+  name: string,
+  systemMessage: string,
+  baseId: string,
+  active: boolean
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<Agent>({
+      url: `${baseUrl}/api/v1/agent/new-version`,
+      method: "POST",
+      body: {
+        name,
+        system_message: systemMessage,
+        base_id: baseId,
+        active,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const createAgent = async (name: string) => {
+  let response = null;
+  try {
+    response = await Ajax.req<Agent>({
+      url: `${baseUrl}/api/v1/agent/new-agent`,
+      method: "POST",
+      body: {
+        name,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
 };

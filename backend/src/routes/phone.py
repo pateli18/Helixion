@@ -22,10 +22,10 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
-from src.ai import AiCaller, AiMessageQueues
+from src.ai.caller import AiCaller, AiMessageQueues
+from src.audio.call_router import CallRouter
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
-from src.caller import CallRouter
 from src.db.api import (
     get_phone_call,
     get_phone_calls,
@@ -82,6 +82,7 @@ async def _validate_twilio_request(request: Request) -> dict:
 class OutboundCallRequest(BaseModel):
     phone_number: str
     user_info: dict
+    agent_id: SerializedUUID
 
 
 class OutboundCallResponse(BaseModel):
@@ -126,6 +127,7 @@ async def outbound_call(
         request.user_info,
         from_phone_number,
         request.phone_number,
+        request.agent_id,
         db,
     )
     await db.commit()
@@ -147,9 +149,10 @@ async def call_stream(
         raise HTTPException(status_code=404, detail="Phone call not found")
     await websocket.accept()
     async with AiCaller(
-        cast(dict, phone_call.input_data),
-        phone_call_id,
-        call_messages[phone_call_id],
+        user_info=phone_call.user_info,
+        system_prompt=phone_call.agent.system_message,
+        phone_call_id=phone_call_id,
+        message_queues=call_messages[phone_call_id],
     ) as ai:
         call_router = CallRouter(ai)
         await asyncio.gather(

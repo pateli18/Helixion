@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.db.base import db_setup, shutdown_session
-from src.routes import browser, phone
+from src.routes import agent, browser, phone
 from src.settings import settings, setup_logging
 
 setup_logging()
@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(browser.router, prefix="/api/v1")
 app.include_router(phone.router, prefix="/api/v1")
+app.include_router(agent.router, prefix="/api/v1")
 
 origins = ["https://app.helixion.ai"]
 app.add_middleware(

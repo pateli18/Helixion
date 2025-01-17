@@ -6,7 +6,7 @@ import websockets
 from fastapi import WebSocket
 from fastapi.websockets import WebSocketState
 
-from src.ai import AiCaller
+from src.ai.caller import AiCaller
 
 logger = logging.getLogger(__name__)
 

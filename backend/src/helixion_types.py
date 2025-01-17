@@ -3,12 +3,15 @@ from enum import Enum
 from typing import Annotated, Literal, Optional, Union, cast
 from uuid import UUID
 
-from pydantic import BaseModel, PlainSerializer, model_serializer
+from pydantic import BaseModel, ConfigDict, PlainSerializer, model_serializer
 
 AUDIO_QUEUE_NAME = "audio_queue"
 METADATA_QUEUE_NAME = "metadata_queue"
 CALL_END_EVENT = "END"
-
+AudioFormat = Literal["pcm16", "g711_ulaw", "g711_alaw"]
+Voice = Literal[
+    "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"
+]
 
 SerializedUUID = Annotated[
     UUID, PlainSerializer(lambda x: str(x), return_type=str)
@@ -229,3 +232,22 @@ class SpeakerSegment(BaseModel):
 class BarHeight(BaseModel):
     height: float
     speaker: Speaker
+
+
+class AgentBase(BaseModel):
+    name: str
+    system_message: str
+    base_id: SerializedUUID
+    active: bool
+
+
+class Agent(AgentBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: SerializedUUID
+    created_at: SerializedDateTime
+
+
+class AiMessageMetadataEventTypes(str, Enum):
+    speaker = "speaker"
+    call_end = "call_end"

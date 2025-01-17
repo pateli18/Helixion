@@ -29,3 +29,12 @@ export type BarHeight = {
   height: number;
   speaker: "User" | "Assistant";
 };
+
+export type Agent = {
+  id: string;
+  name: string;
+  system_message: string;
+  base_id: string;
+  active: boolean;
+  created_at: string;
+};

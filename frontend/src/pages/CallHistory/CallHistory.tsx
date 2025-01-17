@@ -24,7 +24,7 @@ const ClickToCopy = forwardRef<
   React.HTMLAttributes<HTMLDivElement> & {
     text: string;
   }
->(({ className, text }) => {
+>(({ className, text }, ref) => {
   const handleCopy = () => {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
@@ -32,6 +32,7 @@ const ClickToCopy = forwardRef<
 
   return (
     <div
+      ref={ref}
       className={cn("cursor-pointer hover:text-primary", className)}
       onClick={handleCopy}
     >
