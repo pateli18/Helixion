@@ -7,6 +7,9 @@ from fastapi import WebSocket
 from fastapi.websockets import WebSocketState
 
 from src.ai.caller import AiCaller
+from src.db.api import insert_phone_call_event
+from src.db.base import async_session_scope
+from src.helixion_types import PhoneCallStatus
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +133,24 @@ class BrowserRouter:
         self.mark_queue_elapsed_time = 0
         self.ai_caller = ai_caller
         self._hang_up_requested = False
+        self._cleanup_started = False
+
+    async def _cleanup(self) -> None:
+        if self._cleanup_started:
+            logger.info("Cleanup already started")
+            return
+        self._cleanup_started = True
+        phone_call_id, duration = await self.ai_caller.close()
+        async with async_session_scope() as db:
+            await insert_phone_call_event(
+                phone_call_id,
+                {
+                    "CallDuration": duration // 1000,
+                    "CallStatus": PhoneCallStatus.completed,
+                    "SequenceNumber": 0,
+                },
+                db,
+            )
 
     async def send_to_human(self, websocket: WebSocket):
         try:
@@ -158,7 +179,7 @@ class BrowserRouter:
         except Exception:
             logger.exception("Error sending to human")
         finally:
-            await self.ai_caller.close()
+            await self._cleanup()
             if websocket.client_state == WebSocketState.CONNECTED:
                 await websocket.close()
             logger.info("Closed connection to human")
@@ -204,5 +225,5 @@ class BrowserRouter:
         except Exception:
             logger.exception("Error receiving from human")
         finally:
-            await self.ai_caller.close()
+            await self._cleanup()
             logger.info("Closed connection to bot")

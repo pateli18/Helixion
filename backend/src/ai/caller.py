@@ -325,10 +325,10 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
         return response
 
-    async def close(self) -> None:
+    async def close(self) -> tuple[SerializedUUID, int]:
         if self._cleanup_started:
             logger.info("Cleanup already started")
-            return
+            return self._phone_call_id, self._audio_total_buffer_ms
         self._cleanup_started = True
 
         if self._ws_client is not None:
@@ -357,6 +357,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         os.remove(self.log_file)
         self._log_tasks.clear()
         self._log_file = None
+        return self._phone_call_id, self._audio_total_buffer_ms
 
     async def __aiter__(self) -> AsyncIterator[dict]:
         while True:
