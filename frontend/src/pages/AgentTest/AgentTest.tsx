@@ -32,8 +32,6 @@ const CallPhoneNumber = (props: {
     }
   };
 
-  console.log(phoneNumber);
-
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
@@ -148,7 +146,7 @@ export const AgentTestPage = () => {
 
   return (
     <Layout title="Agent Tester">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AgentConfiguration agentId={agentId} setAgentId={setAgentId} />
         {agentId === null ? (
           <div className="flex items-center justify-center">

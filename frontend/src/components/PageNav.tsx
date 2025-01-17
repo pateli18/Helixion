@@ -12,7 +12,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { ArchiveIcon, PhoneIcon } from "lucide-react";
+import { PersonIcon } from "@radix-ui/react-icons";
+import { ArchiveIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 const SidebarItem = (props: {
@@ -60,7 +61,11 @@ export const PageSidebar = () => {
           <SidebarGroupLabel>Pages</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarItem icon={<PhoneIcon />} label="Agent Tester" href="/" />
+              <SidebarItem
+                icon={<PersonIcon />}
+                label="Agent Tester"
+                href="/"
+              />
               <SidebarItem
                 icon={<ArchiveIcon />}
                 label="Call History"
