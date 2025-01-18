@@ -41,13 +41,6 @@ from src.settings import settings
 logger = logging.getLogger(__name__)
 
 
-def _format_user_info(user_info: dict) -> str:
-    user_info_fmt = ""
-    for key, value in user_info.items():
-        user_info_fmt += f"\t-{key}: {value}\n"
-    return user_info_fmt
-
-
 class TurnDetection(BaseModel):
     type: Literal["server_vad"] = "server_vad"
     threshold: float = 0.5  # 0-1, higher is for noisier audio
@@ -72,8 +65,7 @@ class AiSessionConfiguration(BaseModel):
         audio_format: AudioFormat,
         include_hang_up_tool: bool,
     ) -> "AiSessionConfiguration":
-        user_info_fmt = _format_user_info(user_info)
-        system_message = system_prompt.format(user_info=user_info_fmt)
+        system_message = system_prompt.format(**user_info)
 
         tools = []
         if include_hang_up_tool:
