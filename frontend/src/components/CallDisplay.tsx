@@ -10,6 +10,7 @@ import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
 import {
   getAudioTranscript,
+  getBrowserCallUrl,
   getPlayAudioUrl,
   hangUp,
   listenInStream,
@@ -27,6 +28,7 @@ import {
   DrawerTitle,
 } from "./ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { BrowserAudioPlayer } from "./audio/BrowserAudioPlayer";
 
 const SheetView = (props: {
   children: React.ReactNode;
@@ -187,7 +189,6 @@ export const LiveCallDisplay = (props: {
           setCallEnded(true);
           break;
         } else if (payload.type === "speaker") {
-          console.log("speaker", payload.data);
           setSpeakerSegments(payload.data);
         } else {
           const pcm16Data = atob(payload.data);
@@ -243,6 +244,136 @@ export const LiveCallDisplay = (props: {
             speakerSegments={speakerSegments}
             setCurrentSegment={setCurrentSegment}
             handleHangUp={handleHangUp}
+            callEnded={callEnded}
+          />
+          <AudioTranscriptDisplay
+            segments={speakerSegments}
+            currentSegment={currentSegment}
+          />
+        </div>
+      )}
+    </>
+  );
+
+  return isMobile ? (
+    <DrawerView
+      title={title}
+      description={description}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      {components}
+    </DrawerView>
+  ) : (
+    <SheetView
+      title={title}
+      description={description}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      {components}
+    </SheetView>
+  );
+};
+
+export const BrowserCallDisplay = (props: {
+  browserCallId: string | null;
+  setBrowserCallId: (browserCallId: string | null) => void;
+}) => {
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(false);
+  const [speakerSegments, setSpeakerSegments] = useState<SpeakerSegment[]>([]);
+  const [currentSegment, setCurrentSegment] = useState<SpeakerSegment | null>(
+    null
+  );
+  const [callEnded, setCallEnded] = useState(false);
+  const websocketRef = useRef<WebSocket | null>(null);
+  const outputWorkletRef = useRef<AudioWorkletNode | null>(null);
+
+  const connectWebSocket = (phoneCallId: string) => {
+    const ws = new WebSocket(getBrowserCallUrl(phoneCallId));
+
+    ws.onopen = () => {
+      websocketRef.current?.send(
+        JSON.stringify({
+          event: "start",
+        })
+      );
+    };
+
+    ws.onclose = () => {
+      setCallEnded(true);
+    };
+
+    ws.onerror = (e) => {
+      console.error("WebSocket connection error", e);
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        // parse json
+        const data = JSON.parse(event.data);
+
+        // TODO: handle speaker segements
+
+        if (data.event === "clear") {
+          outputWorkletRef.current?.port.postMessage({
+            type: "clear-buffers",
+          });
+        } else if (data.event === "media") {
+          // Send the base64 data directly to the worklet for processing
+          const pcm16Data = atob(data.payload);
+          const buffer = new ArrayBuffer(pcm16Data.length);
+          const view = new Uint8Array(buffer);
+
+          for (let i = 0; i < pcm16Data.length; i++) {
+            view[i] = pcm16Data.charCodeAt(i);
+          }
+
+          outputWorkletRef.current?.port.postMessage(
+            {
+              type: "process-audio",
+              payload: view,
+            },
+            [buffer]
+          );
+        } else if (data.event === "speaker_segments") {
+          setSpeakerSegments(data.payload);
+        }
+      } catch (err) {
+        console.error("Error processing server event:", err);
+      }
+    };
+
+    websocketRef.current = ws;
+  };
+
+  const onOpenChange = (open: boolean) => {
+    if (!open) {
+      props.setBrowserCallId(null);
+      setSpeakerSegments([]);
+      setCurrentSegment(null);
+      setCallEnded(false);
+    }
+    setOpen(open);
+  };
+
+  useEffect(() => {
+    if (!props.browserCallId) return;
+    setOpen(true);
+
+    connectWebSocket(props.browserCallId);
+  }, [props.browserCallId]);
+
+  const title = "Browser Call Audio";
+  const description = "";
+  const components = (
+    <>
+      {props.browserCallId && (
+        <div>
+          <BrowserAudioPlayer
+            websocketRef={websocketRef}
+            outputWorkletRef={outputWorkletRef}
             callEnded={callEnded}
           />
           <AudioTranscriptDisplay

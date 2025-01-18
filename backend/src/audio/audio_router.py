@@ -4,6 +4,7 @@ from typing import Union
 
 import websockets
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 from fastapi.websockets import WebSocketState
 
 from src.ai.caller import AiCaller
@@ -163,7 +164,7 @@ class BrowserRouter:
                             f"Received unexpected function call: {message['name']}"
                         )
 
-                if message["type"] == "response.audio.delta":
+                elif message["type"] == "response.audio.delta":
                     await websocket.send_json(
                         {"event": "media", "payload": message["delta"]}
                     )
@@ -174,8 +175,31 @@ class BrowserRouter:
                         self.mark_queue.clear()
                     self.mark_queue.append(message["audio_ms"])
 
-                if message["type"] == "input_audio_buffer.speech_started":
+                elif message["type"] == "input_audio_buffer.speech_started":
                     await self.handle_speech_started(websocket)
+
+                elif message["type"] == "response.audio_transcript.done":
+                    await websocket.send_json(
+                        {
+                            "event": "speaker_segments",
+                            "payload": jsonable_encoder(
+                                message["speaker_segments"]
+                            ),
+                        },
+                    )
+                elif (
+                    message["type"]
+                    == "conversation.item.input_audio_transcription.completed"
+                ):
+                    await websocket.send_json(
+                        {
+                            "event": "speaker_segments",
+                            "payload": jsonable_encoder(
+                                message["speaker_segments"]
+                            ),
+                        }
+                    )
+
         except Exception:
             logger.exception("Error sending to human")
         finally:
@@ -220,6 +244,9 @@ class BrowserRouter:
                                 "Hang up requested and all media processed"
                             )
                             break
+                elif data["event"] == "hangup":
+                    logger.info("Hang up requested")
+                    break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
         except Exception:

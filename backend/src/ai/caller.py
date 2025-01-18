@@ -389,6 +389,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
                     item_id=response["item_id"],
                 ),
             )
+            response["speaker_segments"] = self._speaker_segments
         elif response["type"] == "response.audio_transcript.done":
             self._update_speaker_segments(
                 SpeakerSegment(
@@ -398,6 +399,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
                     item_id=response["item_id"],
                 ),
             )
+            response["speaker_segments"] = self._speaker_segments
         elif response["type"] == "session.updated":
             # initialize start speaking buffer
             if self._start_speaking_buffer_ms is not None:

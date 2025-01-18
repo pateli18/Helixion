@@ -59,6 +59,9 @@ class PCMOutputProcessor extends AudioWorkletProcessor {
           this.readIndex = 0;
           // If no data in the queue, fill remainder with silence
           if (!this.currentChunk) {
+            this.port.postMessage({
+              type: 'noOutputData',
+            });
             while (offset < channelData.length) {
               channelData[offset++] = 0;
             }

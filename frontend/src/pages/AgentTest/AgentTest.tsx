@@ -1,10 +1,9 @@
-import { BrowserAudioConnection } from "@/components/audio/BrowserAudioConnection";
-import { LiveCallDisplay } from "@/components/CallDisplay";
+import { BrowserCallDisplay, LiveCallDisplay } from "@/components/CallDisplay";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { outboundCall } from "@/utils/apiCalls";
+import { browserCall, outboundCall } from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -97,6 +96,8 @@ const Dialer = (props: {
   setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) => {
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
+  const [browserCallId, setBrowserCallId] = useState<string | null>(null);
+  const [browserCallLoading, setBrowserCallLoading] = useState(false);
 
   const handleCallPhoneNumber = async (phoneNumber: string) => {
     const response = await outboundCall(phoneNumber, props.agentId.versionId, {
@@ -109,13 +110,31 @@ const Dialer = (props: {
     }
   };
 
+  const handleCallBrowser = async () => {
+    setBrowserCallLoading(true);
+    const response = await browserCall(
+      props.agentId.versionId,
+      props.sampleFields
+    );
+    if (response === null) {
+      toast.error("Failed to start call, please try again");
+    } else {
+      setBrowserCallId(response.phone_call_id);
+    }
+    setBrowserCallLoading(false);
+  };
+
   return (
     <div className="space-y-4 px-4">
       {phoneCallId === null && (
-        <BrowserAudioConnection
-          userInfo={props.sampleFields}
-          agentId={props.agentId.versionId}
-        />
+        <div className="flex justify-end">
+          <Button onClick={handleCallBrowser} variant="default">
+            Test Call
+            {browserCallLoading && (
+              <ReloadIcon className="w-4 h-4 animate-spin" />
+            )}
+          </Button>
+        </div>
       )}
       <div className="text-md text-gray-500">Enter Details</div>
       {Object.entries(props.sampleFields).map(([key, value]) => (
@@ -134,6 +153,10 @@ const Dialer = (props: {
       <LiveCallDisplay
         phoneCallId={phoneCallId}
         setPhoneCallId={setPhoneCallId}
+      />
+      <BrowserCallDisplay
+        browserCallId={browserCallId}
+        setBrowserCallId={setBrowserCallId}
       />
     </div>
   );
