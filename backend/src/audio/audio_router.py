@@ -211,6 +211,9 @@ class BrowserRouter:
     async def handle_speech_started(self, websocket: WebSocket):
         if len(self.mark_queue) > 0:
             if self.last_ai_item_id is not None:
+                self.mark_queue_elapsed_time += self.mark_queue.pop(
+                    0
+                )  # just add another message in case
                 await self.ai_caller.truncate_message(
                     self.last_ai_item_id, self.mark_queue_elapsed_time
                 )
