@@ -62,6 +62,12 @@ export const BrowserAudioPlayer = (props: {
     };
   }, []);
 
+  useEffect(() => {
+    if (props.callEnded) {
+      cleanup();
+    }
+  }, [props.callEnded]);
+
   const initializeAudioContext = async () => {
     cleanup();
 
