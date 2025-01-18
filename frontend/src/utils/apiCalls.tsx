@@ -178,3 +178,17 @@ export const createAgent = async (name: string) => {
   }
   return response;
 };
+
+export const getSampleDetails = async (fields: string[]) => {
+  let response = null;
+  try {
+    response = await Ajax.req<Record<string, string>>({
+      url: `${baseUrl}/api/v1/agent/sample-details`,
+      method: "POST",
+      body: { fields },
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
