@@ -134,6 +134,7 @@ class ModelType(str, Enum):
     gpt4o = "gpt-4o"
     claude35 = "claude-3-5-sonnet-20241022"
     realtime = "gpt-4o-realtime-preview-2024-12-17"
+    gpt4o_mini = "gpt-4o-mini"
 
 
 class ModelFunction(BaseModel):

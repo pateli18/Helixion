@@ -3,11 +3,12 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { browserCall, outboundCall } from "@/utils/apiCalls";
+import { browserCall, getSampleDetails, outboundCall } from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AgentConfiguration } from "./AgentConfiguration";
+import { Badge } from "@/components/ui/badge";
 
 const CallPhoneNumber = (props: {
   handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
@@ -98,7 +99,7 @@ const Dialer = (props: {
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
   const [browserCallId, setBrowserCallId] = useState<string | null>(null);
   const [browserCallLoading, setBrowserCallLoading] = useState(false);
-
+  const [sampleDetailsLoading, setSampleDetailsLoading] = useState(false);
   const handleCallPhoneNumber = async (phoneNumber: string) => {
     const response = await outboundCall(phoneNumber, props.agentId.versionId, {
       ...props.sampleFields,
@@ -124,6 +125,17 @@ const Dialer = (props: {
     setBrowserCallLoading(false);
   };
 
+  const handleGetSampleDetails = async () => {
+    setSampleDetailsLoading(true);
+    const response = await getSampleDetails(Object.keys(props.sampleFields));
+    if (response === null) {
+      toast.error("Failed to get sample details, please try again");
+    } else {
+      props.setSampleFields(response);
+    }
+    setSampleDetailsLoading(false);
+  };
+
   return (
     <div className="space-y-4 px-4">
       {phoneCallId === null && (
@@ -136,7 +148,19 @@ const Dialer = (props: {
           </Button>
         </div>
       )}
-      <div className="text-md text-gray-500">Enter Details</div>
+      <div className="flex items-center gap-2">
+        <div className="text-md text-gray-500">Enter Details</div>
+        <Badge
+          variant="secondary"
+          onClick={handleGetSampleDetails}
+          className="cursor-pointer hover:bg-gray-200"
+        >
+          Populate
+          {sampleDetailsLoading && (
+            <ReloadIcon className="ml-2 w-2 h-2 animate-spin" />
+          )}
+        </Badge>
+      </div>
       {Object.entries(props.sampleFields).map(([key, value]) => (
         <SampleField
           key={key}
