@@ -69,6 +69,7 @@ async def call_stream(
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
         audio_format="pcm16",
+        start_speaking_buffer_ms=500,
     ) as ai:
         call_router = BrowserRouter(ai)
         await asyncio.gather(

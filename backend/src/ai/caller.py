@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import os
+import time
 from contextlib import AsyncExitStack
 from datetime import datetime
 from pathlib import Path
@@ -161,14 +162,13 @@ class AiMessageQueue:
 
 
 class AiCaller(AsyncContextManager["AiCaller"]):
-    message_queue: Optional[AiMessageQueue]
-
     def __init__(
         self,
         user_info: dict,
         system_prompt: str,
         phone_call_id: SerializedUUID,
         audio_format: AudioFormat = "g711_ulaw",
+        start_speaking_buffer_ms: Optional[int] = None,
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
@@ -190,6 +190,11 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self._audio_input_buffer: list[tuple[str, int, int]] = []
         self._user_speaking: bool = False
         self._speaker_segments: list[SpeakerSegment] = []
+
+        self._message_queue: Optional[AiMessageQueue] = None
+
+        self._start_speaking_buffer_ms = start_speaking_buffer_ms
+        self._start_speaking_buffer_start_time: Optional[float] = None
 
     async def __aenter__(self) -> "AiCaller":
         self._ws_client = await self._exit_stack.enter_async_context(
@@ -261,6 +266,24 @@ class AiCaller(AsyncContextManager["AiCaller"]):
                 self._speaker_segments,
             )
 
+    async def _start_speaking_message(self):
+        conversation_start_event = {
+            "type": "conversation.item.create",
+            "previous_item_id": "root",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "please introduce yourself, do not wait for me to speak",
+                    }
+                ],
+            },
+        }
+        await self.send_message(json.dumps(conversation_start_event))
+        self._start_speaking_buffer_ms = None
+
     async def send_message(self, message: str) -> None:
         await self.client.send(message)
         task = asyncio.create_task(self._log_message(message))
@@ -286,6 +309,17 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         }
         await self.send_message(json.dumps(audio_append))
 
+        # if start speaking buffer is enabled, check if we need to send a start speaking message
+        if (
+            self._start_speaking_buffer_ms is not None
+            and self._start_speaking_buffer_start_time is not None
+        ):
+            if (
+                time.time() * 1000 - self._start_speaking_buffer_start_time
+                > self._start_speaking_buffer_ms
+            ):
+                await self._start_speaking_message()
+
         # update full message tracker size
         audio_ms = self._audio_ms(audio)
         self._audio_input_buffer_ms += audio_ms
@@ -310,6 +344,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         response = json.loads(message)
 
         if response["type"] == "input_audio_buffer.speech_started":
+            self._start_speaking_buffer_ms = (
+                None  # someone has started speaking
+            )
             self._user_speaking = True
             self._update_speaker_segments(
                 SpeakerSegment(
@@ -341,6 +378,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
                 ),
             )
         elif response["type"] == "response.audio.delta":
+            self._start_speaking_buffer_ms = (
+                None  # someone has started speaking
+            )
             audio_ms = self._audio_ms(response["delta"])
             response["audio_ms"] = audio_ms  # add so that caller can use
             self._audio_total_buffer_ms += audio_ms
@@ -376,6 +416,10 @@ class AiCaller(AsyncContextManager["AiCaller"]):
                     item_id=response["item_id"],
                 ),
             )
+        elif response["type"] == "session.updated":
+            # initialize start speaking buffer
+            if self._start_speaking_buffer_ms is not None:
+                self._start_speaking_buffer_start_time = time.time() * 1000
 
         return response
 
