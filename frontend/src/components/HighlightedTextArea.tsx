@@ -20,7 +20,7 @@ export const HighlightedTextarea = (props: {
       newHighlights.push({
         start: match.index,
         end: match.index + match[0].length,
-        color: "bg-yellow-200",
+        color: "bg-[#DDEA68]",
       });
     }
 

@@ -52,6 +52,12 @@ export const AgentConfiguration = (props: {
     });
   }, []);
 
+  useEffect(() => {
+    if (activeAgent) {
+      extractFields(activeAgent.system_message);
+    }
+  }, [activeAgent?.id]);
+
   const handleSaveVersion = async () => {
     if (newVersion) {
       setSaveLoading(true);
@@ -80,6 +86,24 @@ export const AgentConfiguration = (props: {
         toast.error("Failed to save version");
       }
     }
+  };
+
+  const extractFields = (value: string) => {
+    // Extract all fields surrounded by {}
+    const fields =
+      value.match(/\{([^}]+)\}/g)?.map((field) => field.slice(1, -1)) || [];
+
+    // Update sample fields
+    props.setSampleFields((prev) => {
+      const newFields: Record<string, string> = {};
+
+      // Add fields in order of appearance, preserving existing values
+      fields.forEach((field) => {
+        newFields[field] = field in prev ? prev[field] : "";
+      });
+
+      return newFields;
+    });
   };
 
   return (
@@ -188,23 +212,7 @@ export const AgentConfiguration = (props: {
           (newVersion?.system_message ?? activeAgent?.system_message) || ""
         }
         onChange={(value) => {
-          // Extract all fields surrounded by {}
-          const fields =
-            value.match(/\{([^}]+)\}/g)?.map((field) => field.slice(1, -1)) ||
-            [];
-
-          // Update sample fields
-          props.setSampleFields((prev) => {
-            const newFields: Record<string, string> = {};
-
-            // Add fields in order of appearance, preserving existing values
-            fields.forEach((field) => {
-              newFields[field] = field in prev ? prev[field] : "";
-            });
-
-            return newFields;
-          });
-
+          extractFields(value);
           setNewVersion((prev) => {
             if (prev) {
               return {
