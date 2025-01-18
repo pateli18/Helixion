@@ -172,7 +172,12 @@ export const BrowserAudioConnection = (props: {
       );
       outputWorkletRef.current = new AudioWorkletNode(
         audioContextRef.current!,
-        "pcm-output-processor"
+        "pcm-output-processor",
+        {
+          processorOptions: {
+            inputSampleRate: 24000,
+          },
+        }
       );
 
       outputWorkletRef.current.port.onmessage = (e) => {

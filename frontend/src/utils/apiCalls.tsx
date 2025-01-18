@@ -56,11 +56,15 @@ type MetadataEvent =
   | {
       type: "speaker";
       data: SpeakerSegment[];
+    }
+  | {
+      type: "audio";
+      data: string;
     };
 
-export const streamMetadata = async function* (phoneCallId: string) {
+export const listenInStream = async function* (phoneCallId: string) {
   for await (const payload of Ajax.stream<MetadataEvent>({
-    url: `${baseUrl}/api/v1/phone/stream-metadata/${phoneCallId}`,
+    url: `${baseUrl}/api/v1/phone/listen-in-stream/${phoneCallId}`,
     method: "GET",
   })) {
     yield payload;
@@ -113,10 +117,6 @@ export const getAudioTranscript = async (phoneCallId: string) => {
 
 export const getPlayAudioUrl = (phoneCallId: string) => {
   return `${baseUrl}/api/v1/phone/play-audio/${phoneCallId}`;
-};
-
-export const getAudioStreamUrl = (phoneCallId: string) => {
-  return `${baseUrl}/api/v1/phone/stream-audio/${phoneCallId}`;
 };
 
 export const getBrowserCallUrl = (phoneCallId: string) => {

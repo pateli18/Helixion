@@ -68,7 +68,6 @@ async def call_stream(
         user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
-        message_queues=None,
         audio_format="pcm16",
     ) as ai:
         call_router = BrowserRouter(ai)

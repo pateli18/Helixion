@@ -9,11 +9,10 @@ import {
 import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
 import {
-  getAudioStreamUrl,
   getAudioTranscript,
   getPlayAudioUrl,
   hangUp,
-  streamMetadata,
+  listenInStream,
 } from "@/utils/apiCalls";
 import { toast } from "sonner";
 import { LoadingView } from "./Loader";
@@ -167,8 +166,8 @@ export const LiveCallDisplay = (props: {
   const [currentSegment, setCurrentSegment] = useState<SpeakerSegment | null>(
     null
   );
-  const audioRef = useRef<HTMLAudioElement>(null);
   const [callEnded, setCallEnded] = useState(false);
+  const outputWorkletRef = useRef<AudioWorkletNode | null>(null);
 
   const handleHangUp = async () => {
     if (!props.phoneCallId) return;
@@ -180,15 +179,32 @@ export const LiveCallDisplay = (props: {
     }
   };
 
-  const runMetadataStream = async () => {
+  const runListenInStream = async () => {
     if (!props.phoneCallId) return;
     try {
-      for await (const payload of streamMetadata(props.phoneCallId)) {
+      for await (const payload of listenInStream(props.phoneCallId)) {
         if (payload.type === "call_end") {
           setCallEnded(true);
           break;
-        } else {
+        } else if (payload.type === "speaker") {
+          console.log("speaker", payload.data);
           setSpeakerSegments(payload.data);
+        } else {
+          const pcm16Data = atob(payload.data);
+          const buffer = new ArrayBuffer(pcm16Data.length);
+          const view = new Uint8Array(buffer);
+
+          for (let i = 0; i < pcm16Data.length; i++) {
+            view[i] = pcm16Data.charCodeAt(i);
+          }
+
+          outputWorkletRef.current?.port.postMessage(
+            {
+              type: "process-audio",
+              payload: view,
+            },
+            [buffer]
+          );
         }
       }
     } catch (e) {
@@ -201,6 +217,7 @@ export const LiveCallDisplay = (props: {
       props.setPhoneCallId(null);
       setSpeakerSegments([]);
       setCurrentSegment(null);
+      setCallEnded(false);
     }
     setOpen(open);
   };
@@ -211,7 +228,7 @@ export const LiveCallDisplay = (props: {
 
     // kick off streamingSpeakerSegments in the background
     (async () => {
-      await runMetadataStream();
+      await runListenInStream();
     })();
   }, [props.phoneCallId]);
 
@@ -222,8 +239,7 @@ export const LiveCallDisplay = (props: {
       {props.phoneCallId && (
         <div>
           <LiveAudioPlayer
-            audioRef={audioRef}
-            audioUrl={getAudioStreamUrl(props.phoneCallId)}
+            outputWorkletRef={outputWorkletRef}
             speakerSegments={speakerSegments}
             setCurrentSegment={setCurrentSegment}
             handleHangUp={handleHangUp}

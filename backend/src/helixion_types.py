@@ -249,6 +249,7 @@ class Agent(AgentBase):
     created_at: SerializedDateTime
 
 
-class AiMessageMetadataEventTypes(str, Enum):
+class AiMessageEventTypes(str, Enum):
     speaker = "speaker"
     call_end = "call_end"
+    audio = "audio"

@@ -1,6 +1,11 @@
 class PCMOutputProcessor extends AudioWorkletProcessor {
-    constructor() {
+    constructor(options) {
       super();
+      
+      // Get input sample rate from options parameter
+      this.inputSampleRate = options.processorOptions.inputSampleRate;
+      this.outputSampleRate = sampleRate; // AudioWorkletProcessor provides this globally
+      this.resampleRatio = this.outputSampleRate / this.inputSampleRate;
   
       // A queue of Float32Array chunks waiting to be played
       this.bufferQueue = [];

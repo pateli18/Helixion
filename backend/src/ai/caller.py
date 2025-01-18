@@ -1,4 +1,5 @@
 import asyncio
+import audioop
 import base64
 import json
 import logging
@@ -13,6 +14,7 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    cast,
 )
 
 import aiofiles
@@ -25,8 +27,7 @@ from src.aws_utils import S3Client
 from src.db.api import update_phone_call
 from src.db.base import async_session_scope
 from src.helixion_types import (
-    CALL_END_EVENT,
-    AiMessageMetadataEventTypes,
+    AiMessageEventTypes,
     AudioFormat,
     ModelType,
     SerializedUUID,
@@ -90,58 +91,96 @@ class AiSessionConfiguration(BaseModel):
         )
 
 
-class AiMessageQueues:
-    audio_queue: asyncio.Queue[str]
-    metadata_queue: asyncio.Queue[str]
+class AiMessage(BaseModel):
+    type: AiMessageEventTypes
+    data: Union[str, BaseModel, None, Sequence[BaseModel]]
+    metadata: dict
+
+    @property
+    def serialized(self) -> str:
+        if (
+            self.type == AiMessageEventTypes.audio
+            or self.type == AiMessageEventTypes.call_end
+        ):
+            if self.metadata.get("audio_format") == "g711_ulaw":
+                pcm_data = base64.b64decode(cast(str, self.data))
+                pcm_16bit = audioop.ulaw2lin(pcm_data, 2)
+                self.data = base64.b64encode(pcm_16bit).decode("utf-8")
+            return (
+                json.dumps(
+                    {
+                        "type": self.type.value,
+                        "data": self.data,
+                    },
+                )
+                + "\n"
+            )
+        else:
+            return (
+                json.dumps(
+                    {
+                        "type": self.type.value,
+                        "data": [
+                            segment.model_dump()
+                            for segment in cast(
+                                Sequence[SpeakerSegment], self.data
+                            )
+                        ],
+                    },
+                    default=pydantic_encoder,
+                )
+                + "\n"
+            )
+
+
+class AiMessageQueue:
+    queue: asyncio.Queue[AiMessage]
 
     def __init__(self):
-        self.audio_queue = asyncio.Queue()
-        self.metadata_queue = asyncio.Queue()
+        self.queue = asyncio.Queue()
 
-    def add_audio(self, audio: str):
-        self.audio_queue.put_nowait(audio)
-
-    def add_metadata(
+    def add_data(
         self,
-        event_type: AiMessageMetadataEventTypes,
-        event_data: Union[BaseModel, None, Sequence[BaseModel]],
+        event_type: AiMessageEventTypes,
+        event_data: Union[str, BaseModel, None, Sequence[BaseModel]],
+        metadata: Optional[dict] = None,
     ):
-        self.metadata_queue.put_nowait(
-            json.dumps(
-                {"type": event_type.value, "data": event_data},
-                default=pydantic_encoder,
+        self.queue.put_nowait(
+            AiMessage(
+                type=event_type,
+                data=event_data,
+                metadata=metadata or {},
             )
         )
 
     def end_call(self):
-        self.audio_queue.put_nowait(CALL_END_EVENT)
-
-        self.add_metadata(
-            AiMessageMetadataEventTypes.call_end,
+        self.add_data(
+            AiMessageEventTypes.call_end,
             None,
         )
 
 
 class AiCaller(AsyncContextManager["AiCaller"]):
+    message_queue: Optional[AiMessageQueue]
+
     def __init__(
         self,
         user_info: dict,
         system_prompt: str,
         phone_call_id: SerializedUUID,
-        message_queues: Optional[AiMessageQueues],
         audio_format: AudioFormat = "g711_ulaw",
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
         self._log_file: Optional[str] = None
+        self._audio_format = audio_format
         self.session_configuration = AiSessionConfiguration.default(
-            system_prompt, user_info, audio_format, True
+            system_prompt, user_info, self._audio_format, True
         )
-        self._sampling_rate = 24000 if audio_format == "pcm16" else 8000
+        self._sampling_rate = 24000 if self._audio_format == "pcm16" else 8000
         self._log_tasks: list[asyncio.Task] = []
         self._cleanup_started = False
         self._phone_call_id = phone_call_id
-        self._message_queues = message_queues
         self._audio_input_buffer_ms: int = (
             self.session_configuration.turn_detection.prefix_padding_ms
             if self.session_configuration.turn_detection
@@ -170,6 +209,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
     async def __aexit__(self, exc_type, exc, tb):
         await self._exit_stack.__aexit__(exc_type, exc, tb)
         await self.close()
+
+    def attach_queue(self, queue: AiMessageQueue):
+        self._message_queue = queue
 
     @property
     def client(self):
@@ -213,9 +255,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         if not found:
             self._speaker_segments.append(speaker_segment)
 
-        if self._message_queues is not None:
-            self._message_queues.add_metadata(
-                AiMessageMetadataEventTypes.speaker,
+        if self._message_queue is not None:
+            self._message_queue.add_data(
+                AiMessageEventTypes.speaker,
                 self._speaker_segments,
             )
 
@@ -251,8 +293,12 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         # either dump to streaming queue or input buffer
         if self._user_speaking:
             self._audio_total_buffer_ms += audio_ms
-            if self._message_queues is not None:
-                self._message_queues.add_audio(audio)
+            if self._message_queue is not None:
+                self._message_queue.add_data(
+                    AiMessageEventTypes.audio,
+                    audio,
+                    metadata={"audio_format": self._audio_format},
+                )
         else:
             self._audio_input_buffer.append(
                 (audio, audio_ms, self._audio_input_buffer_ms)
@@ -277,8 +323,12 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             for audio, individual_ms, ms in self._audio_input_buffer:
                 if ms >= audio_start_ms:
                     self._audio_total_buffer_ms += individual_ms
-                    if self._message_queues is not None:
-                        self._message_queues.add_audio(audio)
+                    if self._message_queue is not None:
+                        self._message_queue.add_data(
+                            AiMessageEventTypes.audio,
+                            audio,
+                            metadata={"audio_format": self._audio_format},
+                        )
             self._audio_input_buffer = []
         elif response["type"] == "input_audio_buffer.speech_stopped":
             self._user_speaking = False
@@ -294,8 +344,12 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             audio_ms = self._audio_ms(response["delta"])
             response["audio_ms"] = audio_ms  # add so that caller can use
             self._audio_total_buffer_ms += audio_ms
-            if self._message_queues is not None:
-                self._message_queues.add_audio(response["delta"])
+            if self._message_queue is not None:
+                self._message_queue.add_data(
+                    AiMessageEventTypes.audio,
+                    response["delta"],
+                    metadata={"audio_format": self._audio_format},
+                )
             if (
                 len(self._speaker_segments) > 0
                 and self._speaker_segments[-1].item_id == ""
@@ -335,8 +389,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             await self._ws_client.close()
 
         # close the queues
-        if self._message_queues is not None:
-            self._message_queues.end_call()
+        if self._message_queue is not None:
+            self._message_queue.end_call()
 
         if len(self._log_tasks) > 0:
             logger.info(f"Flushing {len(self._log_tasks)} log tasks")

@@ -1,6 +1,5 @@
 import asyncio
 import audioop
-import base64
 import io
 import logging
 import wave
@@ -22,7 +21,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
-from src.ai.caller import AiCaller, AiMessageQueues
+from src.ai.caller import AiCaller, AiMessageQueue
 from src.audio.audio_router import CallRouter
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
@@ -36,7 +35,7 @@ from src.db.base import get_session
 from src.db.converter import convert_phone_call_model
 from src.helixion_types import (
     BROWSER_NAME,
-    CALL_END_EVENT,
+    AiMessageEventTypes,
     BarHeight,
     PhoneCallMetadata,
     SerializedUUID,
@@ -44,7 +43,7 @@ from src.helixion_types import (
 )
 from src.settings import settings
 
-call_messages: dict[SerializedUUID, AiMessageQueues] = {}
+call_messages: dict[SerializedUUID, AiMessageQueue] = {}
 twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
 twilio_request_validator = RequestValidator(settings.twilio_auth_token)
 audio_cache_lock = asyncio.Lock()
@@ -134,7 +133,7 @@ async def outbound_call(
     await db.commit()
 
     # initialize queues for this call
-    call_messages[phone_call_id] = AiMessageQueues()
+    call_messages[phone_call_id] = AiMessageQueue()
 
     return OutboundCallResponse(phone_call_id=phone_call_id)
 
@@ -153,8 +152,8 @@ async def call_stream(
         user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
-        message_queues=call_messages[phone_call_id],
     ) as ai:
+        ai.attach_queue(call_messages[phone_call_id])
         call_router = CallRouter(ai)
         await asyncio.gather(
             call_router.receive_from_human_call(websocket),
@@ -162,69 +161,28 @@ async def call_stream(
         )
 
 
-@router.get("/stream-audio/{phone_call_id}")
-async def stream_audio(
+@router.get("/listen-in-stream/{phone_call_id}")
+async def listen_in(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
 ):
     phone_call = await get_phone_call(phone_call_id, db)
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
-    logger.info(f"Streaming audio for phone call {phone_call_id}")
+    logger.info(f"Listening in for phone call {phone_call_id}")
 
-    async def audio_stream(phone_call_id: SerializedUUID):
-        # Create WAV header using wave module
-        wav_buffer = io.BytesIO()
-        with wave.open(wav_buffer, "wb") as wav_file:
-            wav_file.setnchannels(1)  # mono
-            wav_file.setsampwidth(2)  # 2 bytes per sample (16-bit)
-            wav_file.setframerate(8000)  # 8kHz for G.711
-            # We don't write any frames yet, just creating the header
-
-        # Send the header first
-        yield wav_buffer.getvalue()
-
-        audio_buffer = bytearray()
-        audio_queue = call_messages[phone_call_id].audio_queue
-        while True:
-            event_data = await audio_queue.get()
-            if event_data == CALL_END_EVENT:
-                yield bytes(audio_buffer)
-                break
-            pcm_data = base64.b64decode(event_data)
-            pcm_16bit = audioop.ulaw2lin(pcm_data, 2)
-            audio_buffer.extend(pcm_16bit)
-
-            if len(audio_buffer) > 8000:
-                yield bytes(audio_buffer)
-                audio_buffer = bytearray()
-
-    return StreamingResponse(
-        audio_stream(phone_call_id), media_type="audio/wav"
-    )
-
-
-@router.get("/stream-metadata/{phone_call_id}")
-async def stream_metadata(
-    phone_call_id: SerializedUUID,
-    db: async_scoped_session = Depends(get_session),
-):
-    phone_call = await get_phone_call(phone_call_id, db)
-    if phone_call is None:
-        raise HTTPException(status_code=404, detail="Phone call not found")
-
-    async def metadata_stream(
+    async def listen_in_stream(
         phone_call_id: SerializedUUID,
     ) -> AsyncGenerator[str, None]:
-        metadata_queue = call_messages[phone_call_id].metadata_queue
+        queue = call_messages[phone_call_id].queue
         while True:
-            event_data = await metadata_queue.get()
-            yield event_data + "\n"
-            if event_data.startswith('{"type": "call_end"'):
+            message = await queue.get()
+            yield message.serialized
+            if message.type == AiMessageEventTypes.call_end:
                 break
 
     return StreamingResponse(
-        metadata_stream(phone_call_id), media_type="application/x-ndjson"
+        listen_in_stream(phone_call_id), media_type="application/x-ndjson"
     )
 
 
