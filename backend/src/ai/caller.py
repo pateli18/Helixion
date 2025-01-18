@@ -268,18 +268,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
     async def _start_speaking_message(self):
         conversation_start_event = {
-            "type": "conversation.item.create",
-            "previous_item_id": "root",
-            "item": {
-                "type": "message",
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": "please introduce yourself, do not wait for me to speak",
-                    }
-                ],
-            },
+            "type": "response.create",
+            "response": {},
         }
         await self.send_message(json.dumps(conversation_start_event))
         self._start_speaking_buffer_ms = None
