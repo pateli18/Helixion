@@ -27,6 +27,7 @@ export const AgentConfiguration = (props: {
       versionId: string;
     } | null
   ) => void;
+  setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -187,6 +188,23 @@ export const AgentConfiguration = (props: {
           (newVersion?.system_message ?? activeAgent?.system_message) || ""
         }
         onChange={(value) => {
+          // Extract all fields surrounded by {}
+          const fields =
+            value.match(/\{([^}]+)\}/g)?.map((field) => field.slice(1, -1)) ||
+            [];
+
+          // Update sample fields
+          props.setSampleFields((prev) => {
+            const newFields: Record<string, string> = {};
+
+            // Add fields in order of appearance, preserving existing values
+            fields.forEach((field) => {
+              newFields[field] = field in prev ? prev[field] : "";
+            });
+
+            return newFields;
+          });
+
           setNewVersion((prev) => {
             if (prev) {
               return {

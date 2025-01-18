@@ -70,7 +70,7 @@ const CallPhoneNumber = (props: {
 const SampleField = (props: {
   name: string;
   value: string;
-  setValue?: React.Dispatch<React.SetStateAction<string>>;
+  setValue?: (newValue: string) => void;
 }) => {
   return (
     <div className="flex items-center gap-2">
@@ -93,19 +93,14 @@ const Dialer = (props: {
     baseId: string;
     versionId: string;
   };
+  sampleFields: Record<string, string>;
+  setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) => {
-  const [name, setName] = useState("Joe Smith");
-  const [email, setEmail] = useState("joe_smith@gmail.com");
-  const [age, setAge] = useState("30");
-  const [location, setLocation] = useState("New York, NY");
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
 
   const handleCallPhoneNumber = async (phoneNumber: string) => {
     const response = await outboundCall(phoneNumber, props.agentId.versionId, {
-      name,
-      email,
-      age,
-      location,
+      ...props.sampleFields,
     });
     if (response === null) {
       toast.error("Failed to start call, please try again");
@@ -118,15 +113,21 @@ const Dialer = (props: {
     <div className="space-y-4 px-4">
       {phoneCallId === null && (
         <BrowserAudioConnection
-          userInfo={{ name, email, age, location }}
+          userInfo={props.sampleFields}
           agentId={props.agentId.versionId}
         />
       )}
       <div className="text-md text-gray-500">Enter Details</div>
-      <SampleField name="Name" value={name} setValue={setName} />
-      <SampleField name="Email" value={email} setValue={setEmail} />
-      <SampleField name="Age" value={age} setValue={setAge} />
-      <SampleField name="Location" value={location} setValue={setLocation} />
+      {Object.entries(props.sampleFields).map(([key, value]) => (
+        <SampleField
+          key={key}
+          name={key}
+          value={value}
+          setValue={(newValue) => {
+            props.setSampleFields((prev) => ({ ...prev, [key]: newValue }));
+          }}
+        />
+      ))}
       {phoneCallId === null && (
         <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
       )}
@@ -139,6 +140,7 @@ const Dialer = (props: {
 };
 
 export const AgentTestPage = () => {
+  const [sampleFields, setSampleFields] = useState<Record<string, string>>({});
   const [agentId, setAgentId] = useState<{
     baseId: string;
     versionId: string;
@@ -147,7 +149,11 @@ export const AgentTestPage = () => {
   return (
     <Layout title="Agent Tester">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <AgentConfiguration agentId={agentId} setAgentId={setAgentId} />
+        <AgentConfiguration
+          agentId={agentId}
+          setAgentId={setAgentId}
+          setSampleFields={setSampleFields}
+        />
         {agentId === null ? (
           <div className="flex items-center justify-center">
             <div className="text-md text-gray-500">
@@ -155,7 +161,11 @@ export const AgentTestPage = () => {
             </div>
           </div>
         ) : (
-          <Dialer agentId={agentId} />
+          <Dialer
+            agentId={agentId}
+            sampleFields={sampleFields}
+            setSampleFields={setSampleFields}
+          />
         )}
       </div>
     </Layout>
