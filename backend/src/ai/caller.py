@@ -404,6 +404,11 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             # initialize start speaking buffer
             if self._start_speaking_buffer_ms is not None:
                 self._start_speaking_buffer_start_time = time.time() * 1000
+        elif response["type"] == "response.done":
+            if response["response"]["status"] == "failed":
+                logger.exception(
+                    f"OpenAI response failed with status: {response['response']['status']}"
+                )
 
         return response
 
