@@ -14,6 +14,7 @@ def process_audio_data(
     file_bytes: bytes,
     sample_rate: int,
 ) -> tuple[list[SpeakerSegment], bytearray]:
+    bytes_per_sample = 1 if sample_rate == 8000 else 2
     file_str = file_bytes.decode("utf-8")
     speaker_segments: list[SpeakerSegment] = []
     total_ms = 0
@@ -42,7 +43,11 @@ def process_audio_data(
             audio_start_ms = line_data["audio_start_ms"]
             for decoded_data, ms in input_buffer_data:
                 if ms >= audio_start_ms:
-                    segment_ms = (len(decoded_data) / 2) * 1000.0 / sample_rate
+                    segment_ms = (
+                        (len(decoded_data) / bytes_per_sample)
+                        * 1000.0
+                        / sample_rate
+                    )
                     input_item_time_elapsed += segment_ms
                     audio_data.append(
                         (
@@ -80,7 +85,9 @@ def process_audio_data(
             )
         elif line_data["type"] == "response.audio.delta":
             decoded_data = base64.b64decode(line_data["delta"])
-            segment_ms = (len(decoded_data) / 2) * 1000.0 / sample_rate
+            segment_ms = (
+                (len(decoded_data) / bytes_per_sample) * 1000.0 / sample_rate
+            )
             output_item_time_elapsed += segment_ms
             audio_data.append(
                 (
@@ -126,7 +133,9 @@ def process_audio_data(
         elif line_data["type"] == "input_audio_buffer.append":
             audio = line_data["audio"]
             decoded_data = base64.b64decode(audio)
-            decoded_data_ms = (len(decoded_data) / 2) * 1000.0 / sample_rate
+            decoded_data_ms = (
+                (len(decoded_data) / bytes_per_sample) * 1000.0 / sample_rate
+            )
             input_data_ms += decoded_data_ms
             if user_speaking:
                 total_ms += decoded_data_ms
@@ -164,7 +173,10 @@ def process_audio_data(
                         )
                         amount_to_remove += segment_ms_to_remove
                         num_bytes_to_remove = int(
-                            segment_ms_to_remove * sample_rate * 2 / 1000
+                            segment_ms_to_remove
+                            * sample_rate
+                            * bytes_per_sample
+                            / 1000
                         )
                         audio_data[i] = (
                             audio_data[i][0][:-num_bytes_to_remove],
