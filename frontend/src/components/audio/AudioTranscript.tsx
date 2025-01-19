@@ -57,6 +57,11 @@ export const AudioTranscriptDisplay = (props: {
             currentSegment={props.currentSegment}
           />
         ))}
+      {props.segments.length === 0 && (
+        <div className="text-center text-gray-500">
+          No conversation exists for this call.
+        </div>
+      )}
     </div>
   );
 };

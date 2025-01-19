@@ -199,6 +199,9 @@ def calculate_bar_heights(
     speaker_segments: list[SpeakerSegment],
     sample_rate: int,
 ) -> list[BarHeight]:
+    if len(speaker_segments) == 0:
+        return []
+
     # Convert bytes to numpy array of 16-bit integers
     samples = np.frombuffer(pcm_data, dtype=np.int16)
 
