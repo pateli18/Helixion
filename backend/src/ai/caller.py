@@ -170,6 +170,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             system_prompt, user_info, self._audio_format, True
         )
         self._sampling_rate = 24000 if self._audio_format == "pcm16" else 8000
+        self._bytes_per_sample = 2 if self._audio_format == "pcm16" else 1
         self._log_tasks: list[asyncio.Task] = []
         self._cleanup_started = False
         self._phone_call_id = phone_call_id
@@ -282,7 +283,11 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
     def _audio_ms(self, audio_b64: str) -> int:
         audio_bytes = base64.b64decode(audio_b64)
-        return int((len(audio_bytes) / 2) * 1000 / self._sampling_rate)
+        return int(
+            (len(audio_bytes) / self._bytes_per_sample)
+            * 1000
+            / self._sampling_rate
+        )
 
     async def receive_human_audio(self, audio: str):
         audio_append = {
