@@ -193,15 +193,10 @@ def process_audio_data(
                         amount_to_remove / 1000
                     )
             total_ms -= amount_to_remove
-            audio_data = [
-                audio_data[i]
-                for i in range(len(audio_data))
-                if i not in segment_indices_to_remove
-            ]
-
     final_audio_data = bytearray()
-    for audio_bytes, _, _, _ in audio_data:
-        final_audio_data.extend(audio_bytes)
+    for i, (audio_bytes, _, _, _) in enumerate(audio_data):
+        if i not in segment_indices_to_remove:
+            final_audio_data.extend(audio_bytes)
     return speaker_segments, final_audio_data
 
 

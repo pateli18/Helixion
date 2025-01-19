@@ -414,6 +414,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
                 logger.exception(
                     f"OpenAI response failed with status: {response['response']['status']}"
                 )
+        elif response["type"] == "error":
+            logger.exception(f"OpenAI error: {response['error']}")
 
         return response
 

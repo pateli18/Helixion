@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import Union
+import time
+from typing import Optional, Union
 
 import websockets
 from fastapi import WebSocket
@@ -20,12 +21,14 @@ class CallRouter:
     last_ai_item_id: Union[str, None]
     mark_queue: list[int]
     mark_queue_elapsed_time: int
+    inter_mark_start_time: Optional[int]
 
     def __init__(self, ai_caller: AiCaller):
         self.stream_sid = None
         self.last_ai_item_id = None
         self.mark_queue = []
         self.mark_queue_elapsed_time = 0
+        self.inter_mark_elapsed_time = 0
         self.ai_caller = ai_caller
         self._hang_up_requested = False
 
@@ -53,6 +56,7 @@ class CallRouter:
                     if self.last_ai_item_id is None:
                         self.last_ai_item_id = message["item_id"]
                         self.mark_queue_elapsed_time = 0
+                        self.inter_mark_start_time = None
                         self.mark_queue.clear()
 
                     if self.stream_sid is not None:
@@ -77,6 +81,13 @@ class CallRouter:
     async def handle_speech_started(self, websocket: WebSocket):
         if len(self.mark_queue) > 0:
             if self.last_ai_item_id is not None:
+                if self.inter_mark_start_time is not None:
+                    self.inter_mark_elapsed_time = (
+                        int(time.time() * 1000) - self.inter_mark_start_time
+                    )
+                    self.mark_queue_elapsed_time += min(
+                        self.inter_mark_elapsed_time, self.mark_queue[0]
+                    )
                 await self.ai_caller.truncate_message(
                     self.last_ai_item_id, self.mark_queue_elapsed_time
                 )
@@ -88,6 +99,7 @@ class CallRouter:
             self.mark_queue.clear()
         self.last_ai_item_id = None
         self.mark_queue_elapsed_time = 0
+        self.inter_mark_start_time = None
 
     async def receive_from_human_call(self, websocket: WebSocket):
         try:
@@ -106,6 +118,11 @@ class CallRouter:
                     if self.mark_queue:
                         time_ms = self.mark_queue.pop(0)
                         self.mark_queue_elapsed_time += time_ms
+                        self.inter_mark_start_time = (
+                            int(time.time() * 1000)
+                            if len(self.mark_queue) > 0
+                            else None
+                        )
                         if (
                             self._hang_up_requested
                             and len(self.mark_queue) == 0
@@ -127,6 +144,7 @@ class BrowserRouter:
     last_ai_item_id: Union[str, None]
     mark_queue: list[int]
     mark_queue_elapsed_time: int
+    inter_mark_start_time: Optional[int]
 
     def __init__(self, ai_caller: AiCaller):
         self.last_ai_item_id = None
@@ -172,6 +190,7 @@ class BrowserRouter:
                     if self.last_ai_item_id is None:
                         self.last_ai_item_id = message["item_id"]
                         self.mark_queue_elapsed_time = 0
+                        self.inter_mark_start_time = None
                         self.mark_queue.clear()
                     self.mark_queue.append(message["audio_ms"])
 
@@ -211,9 +230,13 @@ class BrowserRouter:
     async def handle_speech_started(self, websocket: WebSocket):
         if len(self.mark_queue) > 0:
             if self.last_ai_item_id is not None:
-                self.mark_queue_elapsed_time += self.mark_queue.pop(
-                    0
-                )  # just add another message in case
+                if self.inter_mark_start_time is not None:
+                    self.inter_mark_elapsed_time = (
+                        int(time.time() * 1000) - self.inter_mark_start_time
+                    )
+                    self.mark_queue_elapsed_time += min(
+                        self.inter_mark_elapsed_time, self.mark_queue[0]
+                    )
                 await self.ai_caller.truncate_message(
                     self.last_ai_item_id, self.mark_queue_elapsed_time
                 )
@@ -223,6 +246,7 @@ class BrowserRouter:
             self.mark_queue.clear()
         self.last_ai_item_id = None
         self.mark_queue_elapsed_time = 0
+        self.inter_mark_start_time = None
 
     async def receive_from_human_call(self, websocket: WebSocket):
         try:
@@ -239,6 +263,11 @@ class BrowserRouter:
                     if self.mark_queue:
                         time_ms = self.mark_queue.pop(0)
                         self.mark_queue_elapsed_time += time_ms
+                        self.inter_mark_start_time = (
+                            int(time.time() * 1000)
+                            if len(self.mark_queue) > 0
+                            else None
+                        )
                         if (
                             self._hang_up_requested
                             and len(self.mark_queue) == 0
