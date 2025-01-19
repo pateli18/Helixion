@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+from typing import Optional
 
 import numpy as np
 
@@ -19,11 +20,16 @@ def process_audio_data(
     input_data_ms = 300
     user_speaking = False
     input_buffer_data: list[tuple[bytes, float]] = []
-    audio_data = bytearray()
+    audio_data: list[tuple[bytes, float, float, Optional[str]]] = (
+        []
+    )  # audio bytes, timestamp within item, item id
+    input_item_time_elapsed = 0
+    output_item_time_elapsed = 0
     for line in file_str.splitlines():
         # exlcude timestamp
         line_data = json.loads(line.split("]", 1)[1].strip())
         if line_data["type"] == "input_audio_buffer.speech_started":
+            output_item_time_elapsed = 0
             user_speaking = True
             speaker_segments.append(
                 SpeakerSegment(
@@ -36,8 +42,17 @@ def process_audio_data(
             audio_start_ms = line_data["audio_start_ms"]
             for decoded_data, ms in input_buffer_data:
                 if ms >= audio_start_ms:
-                    audio_data.extend(decoded_data)
-                    total_ms += (len(decoded_data) / 2) * 1000.0 / sample_rate
+                    segment_ms = (len(decoded_data) / 2) * 1000.0 / sample_rate
+                    input_item_time_elapsed += segment_ms
+                    audio_data.append(
+                        (
+                            decoded_data,
+                            segment_ms,
+                            input_item_time_elapsed,
+                            None,
+                        )
+                    )
+                    total_ms += segment_ms
 
         elif (
             line_data["type"]
@@ -54,6 +69,7 @@ def process_audio_data(
 
         elif line_data["type"] == "input_audio_buffer.speech_stopped":
             user_speaking = False
+            input_item_time_elapsed = 0
             speaker_segments.append(
                 SpeakerSegment(
                     timestamp=total_ms / 1000,
@@ -64,8 +80,17 @@ def process_audio_data(
             )
         elif line_data["type"] == "response.audio.delta":
             decoded_data = base64.b64decode(line_data["delta"])
-            audio_data.extend(decoded_data)
-            total_ms += (len(decoded_data) / 2) * 1000.0 / sample_rate
+            segment_ms = (len(decoded_data) / 2) * 1000.0 / sample_rate
+            output_item_time_elapsed += segment_ms
+            audio_data.append(
+                (
+                    decoded_data,
+                    segment_ms,
+                    output_item_time_elapsed,
+                    line_data["item_id"],
+                )
+            )
+            total_ms += segment_ms
 
             # check if the latest speaker does not have an item_id, if not, add one
             if len(speaker_segments) == 0:
@@ -105,11 +130,67 @@ def process_audio_data(
             input_data_ms += decoded_data_ms
             if user_speaking:
                 total_ms += decoded_data_ms
-                audio_data.extend(decoded_data)
+                input_item_time_elapsed += decoded_data_ms
+                audio_data.append(
+                    (
+                        decoded_data,
+                        decoded_data_ms,
+                        input_item_time_elapsed,
+                        None,
+                    )
+                )
             else:
                 input_buffer_data.append((decoded_data, input_data_ms))
 
-    return speaker_segments, audio_data
+        elif line_data["type"] == "conversation.item.truncated":
+            amount_to_remove = 0
+            segment_indices_to_remove = set()
+            for i, (_, segment_ms, elapsed_ms, item_id) in enumerate(
+                audio_data
+            ):
+                if (
+                    item_id is not None
+                    and item_id == line_data["item_id"]
+                    and line_data["audio_end_ms"] < elapsed_ms
+                ):
+                    # check previous elapsed_ms, and if it's not less than audio_end_ms, then this is a partially truncated segment.
+                    if (
+                        i > 0
+                        and line_data["audio_end_ms"] >= audio_data[i - 1][2]
+                    ):
+                        # figure out number of bytes to remove
+                        segment_ms_to_remove = (
+                            elapsed_ms - line_data["audio_end_ms"]
+                        )
+                        amount_to_remove += segment_ms_to_remove
+                        num_bytes_to_remove = int(
+                            segment_ms_to_remove * sample_rate * 2 / 1000
+                        )
+                        audio_data[i] = (
+                            audio_data[i][0][:-num_bytes_to_remove],
+                            audio_data[i][1],
+                            audio_data[i][2],
+                            audio_data[i][3],
+                        )
+                    else:
+                        amount_to_remove += segment_ms
+                        segment_indices_to_remove.add(i)
+            for i, speaker_segment in enumerate(speaker_segments):
+                if speaker_segment.item_id == line_data["item_id"]:
+                    speaker_segments[i + 1].timestamp -= (
+                        amount_to_remove / 1000
+                    )
+            total_ms -= amount_to_remove
+            audio_data = [
+                audio_data[i]
+                for i in range(len(audio_data))
+                if i not in segment_indices_to_remove
+            ]
+
+    final_audio_data = bytearray()
+    for audio_bytes, _, _, _ in audio_data:
+        final_audio_data.extend(audio_bytes)
+    return speaker_segments, final_audio_data
 
 
 def calculate_bar_heights(
