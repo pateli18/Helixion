@@ -78,9 +78,7 @@ export const CallHistoryPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [audioAvailableOnly, setAudioAvailableOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [fromPhoneNumberFilter, setFromPhoneNumberFilter] = useState<string[]>(
-    []
-  );
+  const [agentFilter, setAgentFilter] = useState<string[]>([]);
   const [toPhoneNumberFilter, setToPhoneNumberFilter] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [callHistory, setCallHistory] = useState<PhoneCallMetadata[]>([]);
@@ -133,19 +131,27 @@ export const CallHistoryPage = () => {
       },
     },
     {
-      accessorKey: "from_phone_number",
-      header: "From",
+      accessorKey: "agent",
+      header: "Agent",
       cell: ({ row }: any) => {
-        const fromPhoneNumber = row.original.from_phone_number;
+        const agent = row.original.agent_metadata;
         return (
           <Tooltip>
             <TooltipTrigger>
-              <ClickToCopy
-                text={fromPhoneNumber}
-                className="lowercase max-w-[100px] text-ellipsis overflow-hidden whitespace-nowrap"
-              />
+              <a
+                href={`/?baseId=${agent.base_id}&versionId=${agent.version_id}`}
+              >
+                <Badge
+                  variant="secondary"
+                  className="cursor-pointer hover:bg-gray-500"
+                >
+                  <div className="max-w-[100px] truncate text-ellipsis">
+                    {agent.name}
+                  </div>
+                </Badge>
+              </a>
             </TooltipTrigger>
-            <TooltipContent>{fromPhoneNumber}</TooltipContent>
+            <TooltipContent>Click to view {agent.name}</TooltipContent>
           </Tooltip>
         );
       },
@@ -238,22 +244,21 @@ export const CallHistoryPage = () => {
     return statusFilter.includes(call.status) || statusFilter.length === 0;
   });
 
-  const fromPhoneNumberCounts = filteredStatusData.reduce(
+  const agentCounts = filteredStatusData.reduce(
     (acc, call) => {
-      acc[call.from_phone_number] = (acc[call.from_phone_number] || 0) + 1;
+      acc[call.agent_metadata.name] = (acc[call.agent_metadata.name] || 0) + 1;
       return acc;
     },
     {} as Record<string, number>
   );
 
-  const filteredFromPhoneNumberData = filteredStatusData.filter((call) => {
+  const filteredAgentData = filteredStatusData.filter((call) => {
     return (
-      fromPhoneNumberFilter.includes(call.from_phone_number) ||
-      fromPhoneNumberFilter.length === 0
+      agentFilter.includes(call.agent_metadata.name) || agentFilter.length === 0
     );
   });
 
-  const toPhoneNumberCounts = filteredFromPhoneNumberData.reduce(
+  const toPhoneNumberCounts = filteredAgentData.reduce(
     (acc, call) => {
       acc[call.to_phone_number] = (acc[call.to_phone_number] || 0) + 1;
       return acc;
@@ -261,14 +266,12 @@ export const CallHistoryPage = () => {
     {} as Record<string, number>
   );
 
-  const filteredToPhoneNumberData = filteredFromPhoneNumberData.filter(
-    (call) => {
-      return (
-        toPhoneNumberFilter.includes(call.to_phone_number) ||
-        toPhoneNumberFilter.length === 0
-      );
-    }
-  );
+  const filteredToPhoneNumberData = filteredAgentData.filter((call) => {
+    return (
+      toPhoneNumberFilter.includes(call.to_phone_number) ||
+      toPhoneNumberFilter.length === 0
+    );
+  });
 
   const filteredAudioAvailableOnlyData = filteredToPhoneNumberData.filter(
     (call) => {
@@ -300,10 +303,10 @@ export const CallHistoryPage = () => {
                 setActiveFilter={setStatusFilter}
               />
               <SelectFilter
-                title="From Phone Number"
-                filterCounts={fromPhoneNumberCounts}
-                activeFilter={fromPhoneNumberFilter}
-                setActiveFilter={setFromPhoneNumberFilter}
+                title="Agent"
+                filterCounts={agentCounts}
+                activeFilter={agentFilter}
+                setActiveFilter={setAgentFilter}
               />
               <SelectFilter
                 title="To Phone Number"

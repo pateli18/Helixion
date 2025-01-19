@@ -2,6 +2,7 @@ from typing import cast
 
 from src.db.models import PhoneCallModel
 from src.helixion_types import (
+    AgentMetadata,
     PhoneCallMetadata,
     PhoneCallStatus,
     SerializedUUID,
@@ -31,4 +32,9 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
         created_at=phone_call.created_at,
         duration=event_payload.get("CallDuration"),
         recording_available=phone_call.call_data is not None,
+        agent_metadata=AgentMetadata(
+            base_id=phone_call.agent.base_id,
+            name=phone_call.agent.name,
+            version_id=phone_call.agent.id,
+        ),
     )

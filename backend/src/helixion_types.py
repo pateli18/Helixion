@@ -208,6 +208,12 @@ class PhoneCallStatus(str, Enum):
     no_answer = "no-answer"
 
 
+class AgentMetadata(BaseModel):
+    base_id: SerializedUUID
+    name: str
+    version_id: SerializedUUID
+
+
 class PhoneCallMetadata(BaseModel):
     id: SerializedUUID
     from_phone_number: str
@@ -217,6 +223,7 @@ class PhoneCallMetadata(BaseModel):
     created_at: SerializedDateTime
     duration: Optional[int] = None
     recording_available: bool
+    agent_metadata: AgentMetadata
 
 
 class Speaker(str, Enum):

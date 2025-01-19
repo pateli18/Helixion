@@ -73,6 +73,7 @@ async def get_phone_calls(db: async_scoped_session) -> list[PhoneCallModel]:
     result = await db.execute(
         select(PhoneCallModel)
         .options(selectinload(PhoneCallModel.events))
+        .options(joinedload(PhoneCallModel.agent))
         .order_by(PhoneCallModel.created_at.desc())
     )
     return list(result.scalars().all())

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AgentConfiguration } from "./AgentConfiguration";
 import { Badge } from "@/components/ui/badge";
+import { useSearchParams } from "react-router-dom";
 
 const CallPhoneNumber = (props: {
   handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
@@ -155,7 +156,7 @@ const Dialer = (props: {
           onClick={handleGetSampleDetails}
           className="cursor-pointer hover:bg-gray-200"
         >
-          Populate
+          Auto-Populate
           {sampleDetailsLoading && (
             <ReloadIcon className="ml-2 w-2 h-2 animate-spin" />
           )}

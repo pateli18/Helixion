@@ -7,6 +7,12 @@ export type PhoneCallStatus =
   | "failed"
   | "no-answer";
 
+export type AgentMetadata = {
+  base_id: string;
+  name: string;
+  version_id: string;
+};
+
 export type PhoneCallMetadata = {
   id: string;
   from_phone_number: string;
@@ -16,6 +22,7 @@ export type PhoneCallMetadata = {
   created_at: string;
   duration?: number;
   recording_available: boolean;
+  agent_metadata: AgentMetadata;
 };
 
 export type SpeakerSegment = {

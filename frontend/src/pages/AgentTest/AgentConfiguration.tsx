@@ -15,31 +15,61 @@ import { loadAndFormatDate } from "@/utils/dateFormat";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
-export const AgentConfiguration = (props: {
+interface AgentConfigurationProps {
   agentId: {
     baseId: string;
     versionId: string;
   } | null;
-  setAgentId: (
-    agentId: {
-      baseId: string;
-      versionId: string;
-    } | null
-  ) => void;
+  setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
   setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-}) => {
+}
+
+export const AgentConfiguration = (props: AgentConfigurationProps) => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const activeAgent = agents.find(
     (agent) => agent.id === props.agentId?.versionId
   );
+
+  // Update URL when agentId changes
+  useEffect(() => {
+    if (props.agentId) {
+      setSearchParams(
+        {
+          baseId: props.agentId.baseId,
+          versionId: props.agentId.versionId,
+        },
+        { replace: true }
+      );
+    }
+  }, [props.agentId]);
 
   useEffect(() => {
     getAgents().then((response) => {
       if (response !== null) {
         setAgents(response);
+
+        // Handle URL parameters
+        const baseId = searchParams.get("baseId");
+        const versionId = searchParams.get("versionId");
+        if (baseId && versionId) {
+          const matchingAgent = response.find(
+            (agent) => agent.id === versionId && agent.base_id === baseId
+          );
+          if (matchingAgent) {
+            props.setAgentId({
+              baseId: matchingAgent.base_id,
+              versionId: matchingAgent.id,
+            });
+            return;
+          }
+        }
+
+        // If no valid URL parameters or agent not found, select first agent
         if (props.agentId === null && response.length > 0) {
           props.setAgentId({
             baseId: response[0].base_id,
@@ -146,11 +176,13 @@ export const AgentConfiguration = (props: {
         <Select
           value={props.agentId?.versionId}
           onValueChange={(value) => {
-            const agent = agents.find((agent) => agent.base_id === value);
+            const agent = agents.find(
+              (agent) => agent.base_id === props.agentId?.baseId
+            );
             if (agent) {
               props.setAgentId({
                 baseId: agent.base_id,
-                versionId: agent.id,
+                versionId: value,
               });
               setNewVersion(null);
             }
