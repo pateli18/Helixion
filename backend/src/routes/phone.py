@@ -152,6 +152,8 @@ async def call_stream(
         user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
+        audio_format="g711_ulaw",
+        start_speaking_buffer_ms=500,
     ) as ai:
         ai.attach_queue(call_messages[phone_call_id])
         call_router = CallRouter(ai)
