@@ -138,7 +138,7 @@ const Dialer = (props: {
   };
 
   return (
-    <div className="space-y-4 px-4">
+    <div className="space-y-4 px-4 pb-10">
       {phoneCallId === null && (
         <div className="flex justify-end">
           <Button onClick={handleCallBrowser} variant="default">

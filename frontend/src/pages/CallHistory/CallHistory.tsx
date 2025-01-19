@@ -18,6 +18,7 @@ import { CallDisplay } from "@/components/CallDisplay";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { SearchFilter, SelectFilter } from "@/components/table/SelectFilter";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const ClickToCopy = forwardRef<
   HTMLDivElement,
@@ -75,6 +76,7 @@ const StatusBadge = (props: { status: PhoneCallStatus }) => {
 };
 
 export const CallHistoryPage = () => {
+  const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const [audioAvailableOnly, setAudioAvailableOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -290,30 +292,34 @@ export const CallHistoryPage = () => {
               {filteredAudioAvailableOnlyData.length} calls
             </div>
             <div className="flex items-center space-x-2">
-              <SearchFilter
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search Input Data..."
-                className={cn("w-[200px]")}
-              />
-              <SelectFilter
-                title="Status"
-                filterCounts={statusCounts}
-                activeFilter={statusFilter}
-                setActiveFilter={setStatusFilter}
-              />
-              <SelectFilter
-                title="Agent"
-                filterCounts={agentCounts}
-                activeFilter={agentFilter}
-                setActiveFilter={setAgentFilter}
-              />
-              <SelectFilter
-                title="To Phone Number"
-                filterCounts={toPhoneNumberCounts}
-                activeFilter={toPhoneNumberFilter}
-                setActiveFilter={setToPhoneNumberFilter}
-              />
+              {!isMobile && (
+                <>
+                  <SearchFilter
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    placeholder="Search Input Data..."
+                    className={cn("w-[200px]")}
+                  />
+                  <SelectFilter
+                    title="Status"
+                    filterCounts={statusCounts}
+                    activeFilter={statusFilter}
+                    setActiveFilter={setStatusFilter}
+                  />
+                  <SelectFilter
+                    title="Agent"
+                    filterCounts={agentCounts}
+                    activeFilter={agentFilter}
+                    setActiveFilter={setAgentFilter}
+                  />
+                  <SelectFilter
+                    title="To Phone Number"
+                    filterCounts={toPhoneNumberCounts}
+                    activeFilter={toPhoneNumberFilter}
+                    setActiveFilter={setToPhoneNumberFilter}
+                  />
+                </>
+              )}
               <Label htmlFor="audio-available-only">Audio Available</Label>
               <Switch
                 id="audio-available-only"
