@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
-from src.ai.caller import AiCaller, AiMessageQueue
+from src.ai.caller import AiCaller, AiMessage, AiMessageQueue
 from src.audio.audio_router import CallRouter
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
@@ -199,6 +199,12 @@ async def hang_up(
     twilio_client.calls(cast(str, phone_call.call_sid)).update(
         status="completed"
     )
+    if phone_call_id in call_messages:
+        call_messages[phone_call_id].queue.put_nowait(
+            AiMessage(
+                type=AiMessageEventTypes.call_end, data=None, metadata={}
+            )
+        )
     return Response(status_code=204)
 
 
