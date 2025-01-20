@@ -1,12 +1,12 @@
 import asyncio
 import audioop
+import base64
 import io
 import logging
 import wave
 from typing import AsyncGenerator, cast
 from uuid import uuid4
 
-from cachetools import LRUCache
 from fastapi import (
     APIRouter,
     Depends,
@@ -27,6 +27,7 @@ from src.audio.audio_router import (
     twilio_request_validator,
 )
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
+from src.auth import auth
 from src.aws_utils import S3Client
 from src.db.api import (
     get_phone_call,
@@ -35,7 +36,7 @@ from src.db.api import (
     insert_phone_call_event,
 )
 from src.db.base import get_session
-from src.db.converter import convert_phone_call_model
+from src.db.converter import convert_phone_call_model, latest_phone_call_event
 from src.helixion_types import (
     BROWSER_NAME,
     AiMessageEventTypes,
@@ -48,11 +49,6 @@ from src.helixion_types import (
 from src.settings import settings
 
 call_messages: dict[SerializedUUID, AiMessageQueue] = {}
-audio_cache_lock = asyncio.Lock()
-audio_cache: LRUCache[
-    SerializedUUID,
-    tuple[list[SpeakerSegment], bytes, list[BarHeight], int],
-] = LRUCache(maxsize=50)
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +112,11 @@ async def status_webhook(
     return Response(status_code=204)
 
 
-@router.post("/outbound-call", response_model=OutboundCallResponse)
+@router.post(
+    "/outbound-call",
+    response_model=OutboundCallResponse,
+    dependencies=[Depends(auth.require_user)],
+)
 async def outbound_call(
     request: OutboundCallRequest,
     db: async_scoped_session = Depends(get_session),
@@ -163,6 +163,13 @@ async def call_stream(
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
     await websocket.accept()
+    event_payload = latest_phone_call_event(phone_call)
+    if (
+        event_payload is not None
+        and event_payload["CallStatus"] != PhoneCallStatus.queued
+    ):
+        raise HTTPException(status_code=400, detail="Phone call not queued")
+
     async with AiCaller(
         user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
@@ -178,7 +185,10 @@ async def call_stream(
         )
 
 
-@router.get("/listen-in-stream/{phone_call_id}")
+@router.get(
+    "/listen-in-stream/{phone_call_id}",
+    dependencies=[Depends(auth.require_user)],
+)
 async def listen_in(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
@@ -203,7 +213,11 @@ async def listen_in(
     )
 
 
-@router.post("/hang-up/{phone_call_id}", status_code=204)
+@router.post(
+    "/hang-up/{phone_call_id}",
+    status_code=204,
+    dependencies=[Depends(auth.require_user)],
+)
 async def hang_up(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
@@ -219,7 +233,11 @@ async def hang_up(
     return Response(status_code=204)
 
 
-@router.get("/call-history", response_model=list[PhoneCallMetadata])
+@router.get(
+    "/call-history",
+    response_model=list[PhoneCallMetadata],
+    dependencies=[Depends(auth.require_user)],
+)
 async def get_call_history(
     db: async_scoped_session = Depends(get_session),
 ) -> list[PhoneCallMetadata]:
@@ -227,123 +245,54 @@ async def get_call_history(
     return [convert_phone_call_model(phone_call) for phone_call in phone_calls]
 
 
-async def _process_audio_data(
-    phone_call_id: SerializedUUID,
-    db: async_scoped_session,
-) -> tuple[list[SpeakerSegment], bytes, list[BarHeight], int]:
-    data = audio_cache.get(phone_call_id)
-    if data is None:
-        phone_call = await get_phone_call(phone_call_id, db)
-        if phone_call is None:
-            raise HTTPException(status_code=404, detail="Phone call not found")
-        async with S3Client() as s3:
-            audio_data_raw, _, _ = await s3.download_file(
-                cast(str, phone_call.call_data)
-            )
-        sample_rate = (
-            8000
-            if cast(str, phone_call.from_phone_number) != BROWSER_NAME
-            else 24000
-        )
-        speaker_segments, audio_data = process_audio_data(
-            audio_data_raw, sample_rate
-        )
-        if sample_rate == 8000:
-            audio_data = audioop.ulaw2lin(audio_data, 2)
-        bar_heights = calculate_bar_heights(
-            audio_data, 50, speaker_segments, sample_rate
-        )
-        async with audio_cache_lock:
-            audio_cache[phone_call_id] = (
-                speaker_segments,
-                audio_data,
-                bar_heights,
-                sample_rate,
-            )
-    else:
-        speaker_segments, audio_data, bar_heights, sample_rate = data
-    return speaker_segments, audio_data, bar_heights, sample_rate
-
-
 class AudioTranscriptResponse(BaseModel):
     speaker_segments: list[SpeakerSegment]
     bar_heights: list[BarHeight]
     total_duration: float
+    audio_data_b64: str
 
 
 @router.get(
-    "/audio-transcript/{phone_call_id}", response_model=AudioTranscriptResponse
+    "/playback/{phone_call_id}",
+    response_model=AudioTranscriptResponse,
+    dependencies=[Depends(auth.require_user)],
 )
-async def get_audio_transcript(
+async def get_audio_playback(
     phone_call_id: SerializedUUID,
     db: async_scoped_session = Depends(get_session),
 ):
-    speaker_segments, pcm_data, bar_heights, sample_rate = (
-        await _process_audio_data(phone_call_id, db)
+    phone_call = await get_phone_call(phone_call_id, db)
+    if phone_call is None:
+        raise HTTPException(status_code=404, detail="Phone call not found")
+    async with S3Client() as s3:
+        audio_data_raw, _, _ = await s3.download_file(
+            cast(str, phone_call.call_data)
+        )
+    (sample_rate) = (
+        8000
+        if cast(str, phone_call.from_phone_number) != BROWSER_NAME
+        else 24000
     )
-    return AudioTranscriptResponse(
-        speaker_segments=speaker_segments,
-        bar_heights=bar_heights,
-        total_duration=len(pcm_data) / 2 / sample_rate,
+    speaker_segments, audio_data = process_audio_data(
+        audio_data_raw, sample_rate
+    )
+    if sample_rate == 8000:
+        audio_data = audioop.ulaw2lin(audio_data, 2)
+    bar_heights = calculate_bar_heights(
+        audio_data, 50, speaker_segments, sample_rate
     )
 
-
-@router.get("/play-audio/{phone_call_id}")
-async def play_audio(
-    phone_call_id: SerializedUUID,
-    request: Request,
-    db: async_scoped_session = Depends(get_session),
-):
-    _, audio_data, _, sample_rate = await _process_audio_data(
-        phone_call_id, db
-    )
-
-    # Create WAV header
+    # conver audio to wav and then b64
     wav_buffer = io.BytesIO()
     with wave.open(wav_buffer, "wb") as wav_file:
         wav_file.setnchannels(1)
         wav_file.setsampwidth(2)
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(audio_data)
-
-    full_audio = wav_buffer.getvalue()
-    total_size = len(full_audio)
-
-    # Handle range request
-    range_header = request.headers.get("range")
-
-    if range_header:
-        try:
-            range_match = range_header.replace("bytes=", "").split("-")
-            start = int(range_match[0]) if range_match[0] else 0
-            end = int(range_match[1]) if range_match[1] else total_size - 1
-        except (IndexError, ValueError):
-            raise HTTPException(status_code=400, detail="Invalid range header")
-
-        if start >= total_size or end >= total_size:
-            raise HTTPException(
-                status_code=416, detail="Requested range not satisfiable"
-            )
-
-        chunk_size = end - start + 1
-        headers = {
-            "Content-Range": f"bytes {start}-{end}/{total_size}",
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(chunk_size),
-            "Content-Type": "audio/wav",
-            "Content-Disposition": f"attachment; filename={phone_call_id}.wav",
-        }
-        return Response(
-            full_audio[start : end + 1], status_code=206, headers=headers
-        )
-
-    # Return full audio if no range header
-    return Response(
-        full_audio,
-        media_type="audio/wav",
-        headers={
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(total_size),
-            "Content-Disposition": f"attachment; filename={phone_call_id}.wav",
-        },
+    audio_data_b64 = base64.b64encode(wav_buffer.getvalue()).decode("utf-8")
+    return AudioTranscriptResponse(
+        speaker_segments=speaker_segments,
+        bar_heights=bar_heights,
+        total_duration=len(audio_data) / 2 / sample_rate,
+        audio_data_b64=audio_data_b64,
     )

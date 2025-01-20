@@ -1,7 +1,7 @@
 import "./assets/index.css";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-
+import { RequiredAuthProvider, RedirectToLogin } from "@propelauth/react";
 import { AgentTestPage } from "./pages/AgentTest/AgentTest";
 import { ServicesProviderWrapper } from "./components/ServicesProviderWrapper";
 import { Toaster } from "./components/ui/sonner";
@@ -27,4 +27,16 @@ export const App = () => {
   );
 };
 
-root.render(<App />);
+const authUrl = import.meta.env.VITE_AUTH_URL;
+console.log(authUrl);
+
+root.render(
+  <RequiredAuthProvider
+    authUrl={authUrl}
+    displayIfLoggedOut={
+      <RedirectToLogin postLoginRedirectUrl={window.location.href} />
+    }
+  >
+    <App />
+  </RequiredAuthProvider>
+);

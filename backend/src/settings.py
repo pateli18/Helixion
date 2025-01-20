@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     twilio_account_sid: str
     twilio_auth_token: str
     postgres_uri: str
+    auth_url: str
+    auth_api_key: str
+    auth_webhook_signing_secret: str
     host: str = "localhost:8000"
     sentry_dsn: Optional[str] = None
 

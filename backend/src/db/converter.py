@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Optional, cast
 
 from src.db.models import PhoneCallModel
 from src.helixion_types import (
@@ -9,19 +9,23 @@ from src.helixion_types import (
 )
 
 
+def latest_phone_call_event(phone_call: PhoneCallModel) -> Optional[dict]:
+    if len(phone_call.events) == 0:
+        return None
+    return sorted(
+        phone_call.events,
+        key=lambda event: int(event.payload["SequenceNumber"]),
+    )[-1].payload
+
+
 def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
     # get latest event status
-    if len(phone_call.events) == 0:
+    event_payload = latest_phone_call_event(phone_call)
+    if event_payload is None:
         event_payload = {
             "CallStatus": PhoneCallStatus.queued,
             "CallDuration": None,
         }
-    else:
-        latest_event = sorted(
-            phone_call.events,
-            key=lambda event: int(event.payload["SequenceNumber"]),
-        )[-1]
-        event_payload = latest_event.payload
 
     return PhoneCallMetadata(
         id=cast(SerializedUUID, phone_call.id),

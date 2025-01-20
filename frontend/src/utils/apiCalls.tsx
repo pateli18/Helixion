@@ -9,7 +9,8 @@ if (import.meta.env.VITE_ENV === "prod") {
 export const outboundCall = async (
   phoneNumber: string,
   agentId: string,
-  userInfo: Record<string, string>
+  userInfo: Record<string, string>,
+  accessToken: string | null
 ) => {
   let response = null;
   try {
@@ -21,6 +22,7 @@ export const outboundCall = async (
         agent_id: agentId,
         user_info: userInfo,
       },
+      accessToken,
     });
   } catch (error) {
     console.error(error);
@@ -30,7 +32,8 @@ export const outboundCall = async (
 
 export const browserCall = async (
   agentId: string,
-  userInfo: Record<string, string>
+  userInfo: Record<string, string>,
+  accessToken: string | null
 ) => {
   let response = null;
   try {
@@ -41,6 +44,7 @@ export const browserCall = async (
         agent_id: agentId,
         user_info: userInfo,
       },
+      accessToken,
     });
   } catch (error) {
     console.error(error);
@@ -62,21 +66,29 @@ type MetadataEvent =
       data: string;
     };
 
-export const listenInStream = async function* (phoneCallId: string) {
+export const listenInStream = async function* (
+  phoneCallId: string,
+  accessToken: string | null
+) {
   for await (const payload of Ajax.stream<MetadataEvent>({
     url: `${baseUrl}/api/v1/phone/listen-in-stream/${phoneCallId}`,
     method: "GET",
+    accessToken,
   })) {
     yield payload;
   }
 };
 
-export const hangUp = async (phoneCallId: string) => {
+export const hangUp = async (
+  phoneCallId: string,
+  accessToken: string | null
+) => {
   let response = true;
   try {
     await Ajax.req({
       url: `${baseUrl}/api/v1/phone/hang-up/${phoneCallId}`,
       method: "POST",
+      accessToken,
     });
   } catch (error) {
     response = false;
@@ -85,12 +97,13 @@ export const hangUp = async (phoneCallId: string) => {
   return response;
 };
 
-export const getCallHistory = async () => {
+export const getCallHistory = async (accessToken: string | null) => {
   let response = null;
   try {
     response = await Ajax.req<PhoneCallMetadata[]>({
       url: `${baseUrl}/api/v1/phone/call-history`,
       method: "GET",
+      accessToken,
     });
   } catch (error) {
     console.error(error);
@@ -98,25 +111,26 @@ export const getCallHistory = async () => {
   return response;
 };
 
-export const getAudioTranscript = async (phoneCallId: string) => {
+export const getAudioPlayback = async (
+  phoneCallId: string,
+  accessToken: string | null
+) => {
   let response = null;
   try {
     response = await Ajax.req<{
       speaker_segments: SpeakerSegment[];
       bar_heights: BarHeight[];
       total_duration: number;
+      audio_data_b64: string;
     }>({
-      url: `${baseUrl}/api/v1/phone/audio-transcript/${phoneCallId}`,
+      url: `${baseUrl}/api/v1/phone/playback/${phoneCallId}`,
       method: "GET",
+      accessToken,
     });
   } catch (error) {
     console.error(error);
   }
   return response;
-};
-
-export const getPlayAudioUrl = (phoneCallId: string) => {
-  return `${baseUrl}/api/v1/phone/play-audio/${phoneCallId}`;
 };
 
 export const getBrowserCallUrl = (phoneCallId: string) => {
@@ -126,12 +140,13 @@ export const getBrowserCallUrl = (phoneCallId: string) => {
   );
 };
 
-export const getAgents = async () => {
+export const getAgents = async (accessToken: string | null) => {
   let response = null;
   try {
     response = await Ajax.req<Agent[]>({
       url: `${baseUrl}/api/v1/agent/all`,
       method: "GET",
+      accessToken,
     });
   } catch (error) {
     console.error(error);
@@ -143,7 +158,8 @@ export const createNewAgentVersion = async (
   name: string,
   systemMessage: string,
   baseId: string,
-  active: boolean
+  active: boolean,
+  accessToken: string | null
 ) => {
   let response = null;
   try {
@@ -156,6 +172,7 @@ export const createNewAgentVersion = async (
         base_id: baseId,
         active,
       },
+      accessToken,
     });
   } catch (error) {
     console.error(error);
@@ -163,7 +180,7 @@ export const createNewAgentVersion = async (
   return response;
 };
 
-export const createAgent = async (name: string) => {
+export const createAgent = async (name: string, accessToken: string | null) => {
   let response = null;
   try {
     response = await Ajax.req<Agent>({
@@ -172,6 +189,7 @@ export const createAgent = async (name: string) => {
       body: {
         name,
       },
+      accessToken,
     });
   } catch (error) {
     console.error(error);
@@ -179,13 +197,17 @@ export const createAgent = async (name: string) => {
   return response;
 };
 
-export const getSampleDetails = async (fields: string[]) => {
+export const getSampleDetails = async (
+  fields: string[],
+  accessToken: string | null
+) => {
   let response = null;
   try {
     response = await Ajax.req<Record<string, string>>({
       url: `${baseUrl}/api/v1/agent/sample-details`,
       method: "POST",
       body: { fields },
+      accessToken,
     });
   } catch (error) {
     console.error(error);

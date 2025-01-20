@@ -190,7 +190,7 @@ class BrowserRouter:
                 {
                     "CallDuration": duration // 1000,
                     "CallStatus": PhoneCallStatus.completed,
-                    "SequenceNumber": 0,
+                    "SequenceNumber": 1,
                 },
                 db,
             )

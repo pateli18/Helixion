@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 
 from src.ai.api import send_openai_request
 from src.ai.prompts import default_system_prompt, sample_details_prompt
+from src.auth import auth
 from src.db.api import get_agents, insert_agent
 from src.db.base import get_session
 from src.helixion_types import (
@@ -30,7 +31,11 @@ router = APIRouter(
 )
 
 
-@router.get("/all", response_model=list[Agent])
+@router.get(
+    "/all",
+    response_model=list[Agent],
+    dependencies=[Depends(auth.require_user)],
+)
 async def retrieve_all_agents(
     db: async_scoped_session = Depends(get_session),
 ) -> list[Agent]:
@@ -38,7 +43,11 @@ async def retrieve_all_agents(
     return [Agent.model_validate(agent) for agent in agents]
 
 
-@router.post("/new-version", response_model=Agent)
+@router.post(
+    "/new-version",
+    response_model=Agent,
+    dependencies=[Depends(auth.require_user)],
+)
 async def create_new_agent_version(
     request: AgentBase,
     db: async_scoped_session = Depends(get_session),
@@ -53,7 +62,11 @@ class NewAgentRequest(BaseModel):
     name: str
 
 
-@router.post("/new-agent", response_model=Agent)
+@router.post(
+    "/new-agent",
+    response_model=Agent,
+    dependencies=[Depends(auth.require_user)],
+)
 async def create_agent(
     request: NewAgentRequest,
     db: async_scoped_session = Depends(get_session),
@@ -76,7 +89,11 @@ class SampleDetailsRequest(BaseModel):
     fields: list[str]
 
 
-@router.post("/sample-details", response_model=dict)
+@router.post(
+    "/sample-details",
+    response_model=dict,
+    dependencies=[Depends(auth.require_user)],
+)
 async def sample_details(
     request: SampleDetailsRequest,
 ) -> dict:

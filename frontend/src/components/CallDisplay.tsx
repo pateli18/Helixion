@@ -9,9 +9,8 @@ import {
 import { AudioTranscriptDisplay } from "./audio/AudioTranscript";
 import { useEffect, useRef, useState } from "react";
 import {
-  getAudioTranscript,
+  getAudioPlayback,
   getBrowserCallUrl,
-  getPlayAudioUrl,
   hangUp,
   listenInStream,
 } from "@/utils/apiCalls";
@@ -29,6 +28,7 @@ import {
 } from "./ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrowserAudioPlayer } from "./audio/BrowserAudioPlayer";
+import { useAuthInfo } from "@propelauth/react";
 
 const SheetView = (props: {
   children: React.ReactNode;
@@ -74,14 +74,21 @@ export const CallDisplay = (props: {
   call: PhoneCallMetadata | null;
   setCall: (call: PhoneCallMetadata | null) => void;
 }) => {
+  const authInfo = useAuthInfo();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
-  const [audioTranscript, setAudioTranscript] = useState<{
+  const [audioPlayback, setAudioPlayback] = useState<{
     speaker_segments: SpeakerSegment[];
     bar_heights: BarHeight[];
     total_duration: number;
-  }>({ speaker_segments: [], bar_heights: [], total_duration: 0 });
+    audio_url: string;
+  }>({
+    speaker_segments: [],
+    bar_heights: [],
+    total_duration: 0,
+    audio_url: "",
+  });
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentSegment, setCurrentSegment] = useState<SpeakerSegment | null>(
     null
@@ -90,14 +97,30 @@ export const CallDisplay = (props: {
     if (!props.call) return;
     setOpen(true);
     setTranscriptLoading(true);
-    getAudioTranscript(props.call.id).then((segments) => {
-      if (segments !== null) {
-        setAudioTranscript(segments);
-      } else {
-        toast.error("Failed to fetch audio transcript");
+    getAudioPlayback(props.call.id, authInfo.accessToken ?? null).then(
+      (playback) => {
+        if (playback !== null) {
+          // conver to blob url
+          const blob = new Blob(
+            [
+              Uint8Array.from(atob(playback.audio_data_b64), (c) =>
+                c.charCodeAt(0)
+              ),
+            ],
+            { type: "audio/wav" }
+          );
+          const audioURL = URL.createObjectURL(blob);
+
+          setAudioPlayback({
+            ...playback,
+            audio_url: audioURL,
+          });
+        } else {
+          toast.error("Failed to fetch audio transcript");
+        }
+        setTranscriptLoading(false);
       }
-      setTranscriptLoading(false);
-    });
+    );
   }, [props.call?.id]);
 
   const onOpenChange = (open: boolean) => {
@@ -117,18 +140,18 @@ export const CallDisplay = (props: {
         <LoadingView text="Loading call..." />
       ) : (
         <div>
-          {audioTranscript.speaker_segments.length > 0 && props.call && (
+          {audioPlayback.speaker_segments.length > 0 && props.call && (
             <AudioPlayer
-              audioUrl={getPlayAudioUrl(props.call.id)}
+              audioUrl={audioPlayback.audio_url}
               audioRef={audioRef}
               setCurrentSegment={setCurrentSegment}
-              speakerSegments={audioTranscript.speaker_segments}
-              barHeights={audioTranscript.bar_heights}
-              totalDuration={audioTranscript.total_duration}
+              speakerSegments={audioPlayback.speaker_segments}
+              barHeights={audioPlayback.bar_heights}
+              totalDuration={audioPlayback.total_duration}
             />
           )}
           <AudioTranscriptDisplay
-            segments={audioTranscript.speaker_segments}
+            segments={audioPlayback.speaker_segments}
             audioRef={audioRef}
             currentSegment={currentSegment}
           />
@@ -162,6 +185,7 @@ export const LiveCallDisplay = (props: {
   phoneCallId: string | null;
   setPhoneCallId: (phoneCallId: string | null) => void;
 }) => {
+  const authInfo = useAuthInfo();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [speakerSegments, setSpeakerSegments] = useState<SpeakerSegment[]>([]);
@@ -173,7 +197,10 @@ export const LiveCallDisplay = (props: {
 
   const handleHangUp = async () => {
     if (!props.phoneCallId) return;
-    const response = await hangUp(props.phoneCallId);
+    const response = await hangUp(
+      props.phoneCallId,
+      authInfo.accessToken ?? null
+    );
     if (response === false) {
       toast.error("Failed to hang up call, please try again");
     } else {
@@ -184,7 +211,10 @@ export const LiveCallDisplay = (props: {
   const runListenInStream = async () => {
     if (!props.phoneCallId) return;
     try {
-      for await (const payload of listenInStream(props.phoneCallId)) {
+      for await (const payload of listenInStream(
+        props.phoneCallId,
+        authInfo.accessToken ?? null
+      )) {
         if (payload.type === "call_end") {
           setCallEnded(true);
           break;

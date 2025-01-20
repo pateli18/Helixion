@@ -5,10 +5,12 @@ cachetools
 fastapi
 httpx
 numpy
+propelauth-fastapi
 pydantic-settings
 python-multipart
 sentry-sdk[fastapi]
 sqlalchemy[asyncio]
+svix
 twilio
 uvicorn
 websockets

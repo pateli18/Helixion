@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { SearchFilter, SelectFilter } from "@/components/table/SelectFilter";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthInfo } from "@propelauth/react";
 
 const ClickToCopy = forwardRef<
   HTMLDivElement,
@@ -76,6 +77,7 @@ const StatusBadge = (props: { status: PhoneCallStatus }) => {
 };
 
 export const CallHistoryPage = () => {
+  const authInfo = useAuthInfo();
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const [audioAvailableOnly, setAudioAvailableOnly] = useState(false);
@@ -90,7 +92,7 @@ export const CallHistoryPage = () => {
 
   useEffect(() => {
     setIsLoading(true);
-    getCallHistory().then((callHistory) => {
+    getCallHistory(authInfo.accessToken ?? null).then((callHistory) => {
       if (callHistory === null) {
         toast.error("Failed to fetch call history");
       } else {

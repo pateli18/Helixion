@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
@@ -9,9 +8,15 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 
 from src.ai.caller import AiCaller
 from src.audio.audio_router import BrowserRouter
-from src.db.api import get_phone_call, insert_phone_call
+from src.auth import auth
+from src.db.api import (
+    get_phone_call,
+    insert_phone_call,
+    insert_phone_call_event,
+)
 from src.db.base import get_session
-from src.helixion_types import BROWSER_NAME, SerializedUUID
+from src.db.converter import convert_phone_call_model
+from src.helixion_types import BROWSER_NAME, PhoneCallStatus, SerializedUUID
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +37,11 @@ class CallResponse(BaseModel):
     phone_call_id: SerializedUUID
 
 
-@router.post("/call", response_model=CallResponse)
+@router.post(
+    "/call",
+    response_model=CallResponse,
+    dependencies=[Depends(auth.require_user)],
+)
 async def outbound_call(
     request: CallRequest,
     db: async_scoped_session = Depends(get_session),
@@ -49,6 +58,16 @@ async def outbound_call(
         request.agent_id,
         db,
     )
+    await insert_phone_call_event(
+        phone_call_id,
+        {
+            "CallDuration": 0,
+            "CallStatus": PhoneCallStatus.queued,
+            "SequenceNumber": 0,
+        },
+        db,
+    )
+
     await db.commit()
 
     return CallResponse(phone_call_id=phone_call_id)
@@ -60,13 +79,17 @@ async def call_stream(
     websocket: WebSocket,
     db: async_scoped_session = Depends(get_session),
 ):
-    phone_call = await get_phone_call(phone_call_id, db)
-    if phone_call is None:
+    phone_call_model = await get_phone_call(phone_call_id, db)
+    if phone_call_model is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
+    phone_call = convert_phone_call_model(phone_call_model)
+    if phone_call.status != PhoneCallStatus.queued:
+        raise HTTPException(status_code=400, detail="Phone call not queued")
+
     await websocket.accept()
     async with AiCaller(
-        user_info=cast(dict, phone_call.input_data),
-        system_prompt=phone_call.agent.system_message,
+        user_info=phone_call.input_data,
+        system_prompt=phone_call_model.agent.system_message,
         phone_call_id=phone_call_id,
         audio_format="pcm16",
         start_speaking_buffer_ms=500,

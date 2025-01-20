@@ -5,7 +5,12 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
-from src.db.models import AgentModel, PhoneCallEventModel, PhoneCallModel
+from src.db.models import (
+    AgentModel,
+    PhoneCallEventModel,
+    PhoneCallModel,
+    UserModel,
+)
 from src.helixion_types import AgentBase, SerializedUUID
 
 logger = logging.getLogger(__name__)
@@ -38,6 +43,7 @@ async def get_phone_call(
 ) -> PhoneCallModel:
     result = await db.execute(
         select(PhoneCallModel)
+        .options(selectinload(PhoneCallModel.events))
         .options(joinedload(PhoneCallModel.agent))
         .where(PhoneCallModel.id == phone_call_id)
     )
@@ -111,3 +117,18 @@ async def get_agents(db: async_scoped_session) -> list[AgentModel]:
         select(AgentModel).order_by(AgentModel.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def insert_user(
+    user_id: str,
+    email: str,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        insert(UserModel).values(
+            {
+                "id": user_id,
+                "email": email,
+            }
+        )
+    )

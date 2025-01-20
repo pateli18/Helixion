@@ -16,6 +16,7 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
+import { useAuthInfo } from "@propelauth/react";
 
 interface AgentConfigurationProps {
   agentId: {
@@ -27,6 +28,7 @@ interface AgentConfigurationProps {
 }
 
 export const AgentConfiguration = (props: AgentConfigurationProps) => {
+  const authInfo = useAuthInfo();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
@@ -49,7 +51,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
   }, [props.agentId]);
 
   useEffect(() => {
-    getAgents().then((response) => {
+    getAgents(authInfo.accessToken ?? null).then((response) => {
       if (response !== null) {
         setAgents(response);
 
@@ -95,7 +97,8 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         newVersion.name,
         newVersion.system_message,
         newVersion.base_id,
-        newVersion.active
+        newVersion.active,
+        authInfo.accessToken ?? null
       );
       setSaveLoading(false);
       if (response !== null) {

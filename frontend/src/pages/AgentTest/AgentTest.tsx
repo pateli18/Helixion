@@ -9,7 +9,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AgentConfiguration } from "./AgentConfiguration";
 import { Badge } from "@/components/ui/badge";
-import { useSearchParams } from "react-router-dom";
+import { useAuthInfo } from "@propelauth/react";
 
 const CallPhoneNumber = (props: {
   handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
@@ -97,14 +97,20 @@ const Dialer = (props: {
   sampleFields: Record<string, string>;
   setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }) => {
+  const authInfo = useAuthInfo();
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
   const [browserCallId, setBrowserCallId] = useState<string | null>(null);
   const [browserCallLoading, setBrowserCallLoading] = useState(false);
   const [sampleDetailsLoading, setSampleDetailsLoading] = useState(false);
   const handleCallPhoneNumber = async (phoneNumber: string) => {
-    const response = await outboundCall(phoneNumber, props.agentId.versionId, {
-      ...props.sampleFields,
-    });
+    const response = await outboundCall(
+      phoneNumber,
+      props.agentId.versionId,
+      {
+        ...props.sampleFields,
+      },
+      authInfo.accessToken ?? null
+    );
     if (response === null) {
       toast.error("Failed to start call, please try again");
     } else {
@@ -116,7 +122,8 @@ const Dialer = (props: {
     setBrowserCallLoading(true);
     const response = await browserCall(
       props.agentId.versionId,
-      props.sampleFields
+      props.sampleFields,
+      authInfo.accessToken ?? null
     );
     if (response === null) {
       toast.error("Failed to start call, please try again");
@@ -128,7 +135,10 @@ const Dialer = (props: {
 
   const handleGetSampleDetails = async () => {
     setSampleDetailsLoading(true);
-    const response = await getSampleDetails(Object.keys(props.sampleFields));
+    const response = await getSampleDetails(
+      Object.keys(props.sampleFields),
+      authInfo.accessToken ?? null
+    );
     if (response === null) {
       toast.error("Failed to get sample details, please try again");
     } else {
