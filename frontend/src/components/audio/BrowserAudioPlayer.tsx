@@ -51,6 +51,11 @@ export const BrowserAudioPlayer = (props: {
     if (outputAnalyserRef.current) {
       outputAnalyserRef.current = null;
     }
+
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = undefined;
+    }
   };
   // Cleanup on unmount
   useEffect(() => {
@@ -76,6 +81,8 @@ export const BrowserAudioPlayer = (props: {
       latencyHint: "interactive",
       sampleRate: 24000,
     });
+
+    await audioContextRef.current.resume();
 
     // setup mic stream
     streamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -112,13 +119,14 @@ export const BrowserAudioPlayer = (props: {
         const pcmData = new Int16Array(event.data.buffer);
         const pcmBytes = new Uint8Array(pcmData.buffer);
         const base64Data = btoa(String.fromCharCode(...pcmBytes));
-
-        props.websocketRef.current?.send(
-          JSON.stringify({
-            event: "media",
-            payload: base64Data,
-          })
-        );
+        if (props.websocketRef.current?.readyState === WebSocket.OPEN) {
+          props.websocketRef.current.send(
+            JSON.stringify({
+              event: "media",
+              payload: base64Data,
+            })
+          );
+        }
       }
     };
 
@@ -141,7 +149,9 @@ export const BrowserAudioPlayer = (props: {
 
     props.outputWorkletRef.current.port.onmessage = (e) => {
       if (e.data?.type === "chunkEnd") {
-        props.websocketRef.current?.send(JSON.stringify({ event: "mark" }));
+        if (props.websocketRef.current?.readyState === WebSocket.OPEN) {
+          props.websocketRef.current.send(JSON.stringify({ event: "mark" }));
+        }
         activeSpeakerRef.current = "Assistant";
       } else if (e.data?.type === "noOutputData") {
         activeSpeakerRef.current = "User";
@@ -168,9 +178,11 @@ export const BrowserAudioPlayer = (props: {
         ? inputAnalyserRef.current
         : outputAnalyserRef.current;
 
-    const bufferLength = relevantAnalyser!.frequencyBinCount;
+    if (!relevantAnalyser) return;
+
+    const bufferLength = relevantAnalyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
-    relevantAnalyser!.getByteFrequencyData(dataArray);
+    relevantAnalyser.getByteFrequencyData(dataArray);
     const currentTime = audioContextRef.current.currentTime; // Get time from AudioContext
     setCurrentTime(currentTime);
 

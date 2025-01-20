@@ -113,6 +113,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           baseId: response.base_id,
           versionId: response.id,
         });
+        extractFields(response.system_message);
         setNewVersion(null);
         toast.success("Version saved");
       } else {
@@ -247,7 +248,6 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           (newVersion?.system_message ?? activeAgent?.system_message) || ""
         }
         onChange={(value) => {
-          extractFields(value);
           setNewVersion((prev) => {
             if (prev) {
               return {
