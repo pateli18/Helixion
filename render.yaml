@@ -64,4 +64,4 @@ services:
         value: "fullscreen=*, microphone=self"
       - path: "/*"
         name: "Content-Security-Policy"
-        value: "default-src 'self'; connect-src 'self' blob: wss://*.helixion.ai https://*.helixion.ai *.sentry.io api.openai.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; worker-src 'self' blob:; media-src 'self' data: *.helixion.ai; img-src * data: blob:; font-src 'self' https://fonts.gstatic.com;"
+        value: "default-src 'self'; connect-src 'self' blob: wss://*.helixion.ai https://*.helixion.ai *.sentry.io api.openai.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; worker-src 'self' blob:; media-src 'self' data: blob: *.helixion.ai; img-src * data: blob:; font-src 'self' https://fonts.gstatic.com;"

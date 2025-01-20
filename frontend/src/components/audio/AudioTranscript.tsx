@@ -44,7 +44,6 @@ export const AudioTranscriptDisplay = (props: {
   audioRef?: MutableRefObject<HTMLAudioElement | null>;
   currentSegment: SpeakerSegment | null;
 }) => {
-  console.log("segments", props.segments);
   return (
     <div className="space-y-2">
       {props.segments

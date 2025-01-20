@@ -28,7 +28,6 @@ export const App = () => {
 };
 
 const authUrl = import.meta.env.VITE_AUTH_URL;
-console.log(authUrl);
 
 root.render(
   <RequiredAuthProvider
