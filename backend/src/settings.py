@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     openai_api_key: str
     log_level: str = "INFO"
     aws_default_region: str = "us-west-2"
+    twilio_username: str
+    twilio_password: str
     twilio_account_sid: str
     twilio_auth_token: str
     postgres_uri: str

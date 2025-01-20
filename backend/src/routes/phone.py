@@ -18,11 +18,14 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
-from twilio.request_validator import RequestValidator
-from twilio.rest import Client
 
-from src.ai.caller import AiCaller, AiMessage, AiMessageQueue
-from src.audio.audio_router import CallRouter
+from src.ai.caller import AiCaller, AiMessageQueue
+from src.audio.audio_router import (
+    CallRouter,
+    hang_up_phone_call,
+    twilio_client,
+    twilio_request_validator,
+)
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.aws_utils import S3Client
 from src.db.api import (
@@ -44,8 +47,6 @@ from src.helixion_types import (
 from src.settings import settings
 
 call_messages: dict[SerializedUUID, AiMessageQueue] = {}
-twilio_client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-twilio_request_validator = RequestValidator(settings.twilio_auth_token)
 audio_cache_lock = asyncio.Lock()
 audio_cache: LRUCache[
     SerializedUUID,
@@ -107,7 +108,7 @@ async def outbound_call(
     db: async_scoped_session = Depends(get_session),
 ):
     phone_call_id = uuid4()
-    from_phone_number = "+16282385962"
+    from_phone_number = "+13305787677"
     call = twilio_client.calls.create(
         to=request.phone_number,
         from_=from_phone_number,
@@ -156,7 +157,7 @@ async def call_stream(
         start_speaking_buffer_ms=500,
     ) as ai:
         ai.attach_queue(call_messages[phone_call_id])
-        call_router = CallRouter(ai)
+        call_router = CallRouter(cast(str, phone_call.call_sid), ai)
         await asyncio.gather(
             call_router.receive_from_human_call(websocket),
             call_router.send_to_human(websocket),
@@ -198,15 +199,9 @@ async def hang_up(
         raise HTTPException(status_code=404, detail="Phone call not found")
     if phone_call.call_data is not None:
         raise HTTPException(status_code=400, detail="Phone call already ended")
-    twilio_client.calls(cast(str, phone_call.call_sid)).update(
-        status="completed"
-    )
+    hang_up_phone_call(cast(str, phone_call.call_sid))
     if phone_call_id in call_messages:
-        call_messages[phone_call_id].queue.put_nowait(
-            AiMessage(
-                type=AiMessageEventTypes.call_end, data=None, metadata={}
-            )
-        )
+        call_messages[phone_call_id].end_call()
     return Response(status_code=204)
 
 

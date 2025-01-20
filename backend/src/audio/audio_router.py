@@ -7,13 +7,27 @@ import websockets
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 from fastapi.websockets import WebSocketState
+from twilio.request_validator import RequestValidator
+from twilio.rest import Client
 
 from src.ai.caller import AiCaller
 from src.db.api import insert_phone_call_event
 from src.db.base import async_session_scope
 from src.helixion_types import PhoneCallStatus
+from src.settings import settings
 
 logger = logging.getLogger(__name__)
+
+twilio_client = Client(
+    account_sid=settings.twilio_account_sid,
+    password=settings.twilio_password,
+    username=settings.twilio_username,
+)
+twilio_request_validator = RequestValidator(settings.twilio_auth_token)
+
+
+def hang_up_phone_call(call_sid: str):
+    twilio_client.calls(call_sid).update(status="completed")
 
 
 class CallRouter:
@@ -23,7 +37,8 @@ class CallRouter:
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
 
-    def __init__(self, ai_caller: AiCaller):
+    def __init__(self, call_sid: str, ai_caller: AiCaller):
+        self.call_sid = call_sid
         self.stream_sid = None
         self.last_ai_item_id = None
         self.mark_queue = []
@@ -32,12 +47,25 @@ class CallRouter:
         self.ai_caller = ai_caller
         self._hang_up_requested = False
 
+    async def _cleanup(self) -> None:
+        await self.ai_caller.close()
+        hang_up_phone_call(self.call_sid)
+        logger.info("Cleanup complete")
+
     async def send_to_human(self, websocket: WebSocket):
         try:
             async for message in self.ai_caller:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
-                        self._hang_up_requested = True
+                        arguments = json.loads(message["arguments"])
+                        if arguments["reason"] == "answering_machine":
+                            logger.info(
+                                "Answering machine detected, not leaving a message"
+                            )
+                            break
+                        else:
+                            self._hang_up_requested = True
+                            logger.info("Hang up requested")
                     else:
                         logger.warning(
                             f"Received unexpected function call: {message['name']}"
@@ -73,10 +101,7 @@ class CallRouter:
         except Exception:
             logger.exception("Error sending to human")
         finally:
-            await self.ai_caller.close()
-            if websocket.client_state == WebSocketState.CONNECTED:
-                await websocket.close()
-            logger.info("Closed connection to human")
+            await self._cleanup()
 
     async def handle_speech_started(self, websocket: WebSocket):
         if len(self.mark_queue) > 0:
@@ -136,8 +161,7 @@ class CallRouter:
         except Exception:
             logger.exception("Error receiving from human")
         finally:
-            await self.ai_caller.close()
-            logger.info("Closed connection to bot")
+            await self._cleanup()
 
 
 class BrowserRouter:
