@@ -41,6 +41,7 @@ from src.helixion_types import (
     AiMessageEventTypes,
     BarHeight,
     PhoneCallMetadata,
+    PhoneCallStatus,
     SerializedUUID,
     SpeakerSegment,
 )
@@ -98,6 +99,19 @@ async def status_webhook(
 ):
     await insert_phone_call_event(phone_call_id, payload, db)
     await db.commit()
+
+    # end live streams with terminal states
+    if (
+        payload["CallStatus"]
+        in [
+            PhoneCallStatus.completed,
+            PhoneCallStatus.busy,
+            PhoneCallStatus.failed,
+            PhoneCallStatus.no_answer,
+        ]
+        and phone_call_id in call_messages
+    ):
+        call_messages[phone_call_id].end_call()
 
     return Response(status_code=204)
 
