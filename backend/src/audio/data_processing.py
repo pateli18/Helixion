@@ -24,6 +24,7 @@ def process_audio_data(
     audio_data: list[tuple[bytes, float, float, Optional[str]]] = (
         []
     )  # audio bytes, timestamp within item, item id
+    segment_indices_to_remove = set()
     input_item_time_elapsed = 0
     output_item_time_elapsed = 0
     for line in file_str.splitlines():
@@ -153,7 +154,6 @@ def process_audio_data(
 
         elif line_data["type"] == "conversation.item.truncated":
             amount_to_remove = 0
-            segment_indices_to_remove = set()
             for i, (_, segment_ms, elapsed_ms, item_id) in enumerate(
                 audio_data
             ):
