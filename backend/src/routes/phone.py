@@ -55,7 +55,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/phone",
     tags=["phone"],
-    include_in_schema=False,
     responses={404: {"description": "Not found"}},
 )
 

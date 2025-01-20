@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/browser",
     tags=["browser"],
-    include_in_schema=False,
     responses={404: {"description": "Not found"}},
 )
 

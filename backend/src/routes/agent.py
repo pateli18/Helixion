@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/agent",
     tags=["agent"],
-    include_in_schema=False,
     responses={404: {"description": "Not found"}},
 )
 

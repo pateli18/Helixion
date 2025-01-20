@@ -25,7 +25,12 @@ async def lifespan(app: FastAPI):
     await shutdown_session()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
+)
 app.include_router(browser.router, prefix="/api/v1")
 app.include_router(phone.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
