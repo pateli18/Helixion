@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
 from src.db.models import (
+    AgentDocumentModel,
     AgentModel,
+    DocumentModel,
     PhoneCallEventModel,
     PhoneCallModel,
     UserModel,
@@ -88,7 +90,7 @@ async def get_phone_calls(db: async_scoped_session) -> list[PhoneCallModel]:
 async def insert_agent(
     payload: AgentBase,
     db: async_scoped_session,
-) -> AgentModel:
+) -> SerializedUUID:
     if payload.active is True:
         # disable all other agents with the same base_id
         await db.execute(
@@ -97,26 +99,45 @@ async def insert_agent(
             .values(active=False)
         )
     result = await db.execute(
-        insert(AgentModel).returning(AgentModel).values(payload.model_dump())
+        insert(AgentModel)
+        .returning(AgentModel.id)
+        .values(payload.model_dump())
     )
-    agent_model = result.scalar_one()
-    return agent_model
+    return result.scalar_one()
 
 
 async def get_agent(
     agent_id: SerializedUUID, db: async_scoped_session
 ) -> Optional[AgentModel]:
     result = await db.execute(
-        select(AgentModel).where(AgentModel.id == agent_id)
+        select(AgentModel)
+        .options(
+            selectinload(AgentModel.documents)
+            .joinedload(AgentDocumentModel.document)
+            .load_only(
+                DocumentModel.id,  # type: ignore
+                DocumentModel.name,  # type: ignore
+            )
+        )
+        .where(AgentModel.id == agent_id)
     )
     return result.scalar_one_or_none()
 
 
 async def get_agents(db: async_scoped_session) -> list[AgentModel]:
     result = await db.execute(
-        select(AgentModel).order_by(AgentModel.created_at.desc())
+        select(AgentModel)
+        .options(
+            selectinload(AgentModel.documents)
+            .joinedload(AgentDocumentModel.document)
+            .load_only(
+                DocumentModel.id,  # type: ignore
+                DocumentModel.name,  # type: ignore
+            )
+        )
+        .order_by(AgentModel.created_at.desc())
     )
-    return list(result.scalars().all())
+    return list(result.scalars().unique().all())
 
 
 async def insert_user(
@@ -132,3 +153,15 @@ async def insert_user(
             }
         )
     )
+
+
+async def get_agent_documents(
+    base_agent_id: SerializedUUID, db: async_scoped_session
+) -> list[DocumentModel]:
+    result = await db.execute(
+        select(DocumentModel)
+        .join(AgentDocumentModel)
+        .where(AgentDocumentModel.base_agent_id == base_agent_id)
+        .where(DocumentModel.id == AgentDocumentModel.document_id)
+    )
+    return list(result.scalars().all())

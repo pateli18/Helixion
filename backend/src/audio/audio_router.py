@@ -11,6 +11,7 @@ from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
 from src.ai.caller import AiCaller
+from src.ai.document_query import query_documents
 from src.db.api import insert_phone_call_event
 from src.db.base import async_session_scope
 from src.helixion_types import PhoneCallStatus
@@ -66,6 +67,17 @@ class CallRouter:
                         else:
                             self._hang_up_requested = True
                             logger.info("Hang up requested")
+                    elif message["name"] == "query_documents":
+                        arguments = json.loads(message["arguments"])
+                        query = arguments["query"]
+                        documents = await query_documents(
+                            query, self.ai_caller.documents
+                        )
+                        await self.ai_caller.receive_tool_call_result(
+                            message["item_id"],
+                            message["call_id"],
+                            documents,
+                        )
                     else:
                         logger.warning(
                             f"Received unexpected function call: {message['name']}"
@@ -201,6 +213,17 @@ class BrowserRouter:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
                         self._hang_up_requested = True
+                    elif message["name"] == "query_documents":
+                        arguments = json.loads(message["arguments"])
+                        query = arguments["query"]
+                        documents = await query_documents(
+                            query, self.ai_caller.documents
+                        )
+                        await self.ai_caller.receive_tool_call_result(
+                            message["item_id"],
+                            message["call_id"],
+                            documents,
+                        )
                     else:
                         logger.warning(
                             f"Received unexpected function call: {message['name']}"

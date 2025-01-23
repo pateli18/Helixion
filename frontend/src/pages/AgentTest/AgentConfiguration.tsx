@@ -10,13 +10,74 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Agent } from "@/types";
-import { getAgents, createNewAgentVersion } from "@/utils/apiCalls";
+import {
+  getAgents,
+  createNewAgentVersion,
+  createAgent,
+} from "@/utils/apiCalls";
 import { loadAndFormatDate } from "@/utils/dateFormat";
-import { ReloadIcon } from "@radix-ui/react-icons";
+import { PlusIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
 import { useAuthInfo } from "@propelauth/react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogHeader,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+const CreateNewAgentModal = (props: {
+  setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
+  setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
+}) => {
+  const authInfo = useAuthInfo();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const handleCreateNewAgent = async (name: string) => {
+    const response = await createAgent(name, authInfo.accessToken ?? null);
+    if (response !== null) {
+      props.setAgents((prev) => [response, ...prev]);
+      props.setAgentId({
+        baseId: response.base_id,
+        versionId: response.id,
+      });
+      toast.success("Agent created");
+      setOpen(false);
+    } else {
+      toast.error("Failed to create agent, please try again");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger>
+        <Button>
+          <PlusIcon className="w-4 h-4 mr-2" />
+          Create New Agent
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Agent</DialogTitle>
+        </DialogHeader>
+        <Input
+          placeholder="Enter New Agent Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <Button
+          disabled={name.length === 0}
+          onClick={() => handleCreateNewAgent(name)}
+        >
+          Create
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 interface AgentConfigurationProps {
   agentId: {
@@ -174,6 +235,10 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
             </div>
           </SelectContent>
         </Select>
+        <CreateNewAgentModal
+          setAgents={setAgents}
+          setAgentId={props.setAgentId}
+        />
       </div>
       <div className="flex items-center gap-2">
         <div className="font-bold text-sm">Version</div>
@@ -262,6 +327,13 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           });
         }}
       />
+      <div className="flex flex-wrap gap-2">
+        {activeAgent?.document_metadata.map((document) => (
+          <Badge variant="secondary" key={document.id}>
+            {document.name}
+          </Badge>
+        ))}
+      </div>
       {newVersion && (
         <Button onClick={handleSaveVersion}>
           Save Version

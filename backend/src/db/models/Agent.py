@@ -1,4 +1,4 @@
-from sqlalchemy import VARCHAR, Boolean, Column, text
+from sqlalchemy import VARCHAR, Boolean, Column, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -20,3 +20,43 @@ class AgentModel(Base, TimestampMixin):
     active = Column(Boolean, nullable=False)
 
     phone_calls = relationship("PhoneCallModel", back_populates="agent")
+    documents = relationship(
+        "AgentDocumentModel",
+        back_populates="agents",
+        primaryjoin="foreign(AgentDocumentModel.base_agent_id) == AgentModel.base_id",
+    )
+
+
+class DocumentModel(Base, TimestampMixin):
+    __tablename__ = "document"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    name = Column(VARCHAR, nullable=False)
+    text = Column(VARCHAR, nullable=False)
+
+    agents = relationship("AgentDocumentModel", back_populates="document")
+
+
+class AgentDocumentModel(Base, TimestampMixin):
+    __tablename__ = "agent_document"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    base_agent_id = Column(UUID(as_uuid=True), nullable=False)
+    document_id = Column(
+        UUID(as_uuid=True), ForeignKey("document.id"), nullable=False
+    )
+
+    agents = relationship(
+        "AgentModel",
+        back_populates="documents",
+        primaryjoin="foreign(AgentDocumentModel.base_agent_id) == AgentModel.base_id",
+    )
+    document = relationship("DocumentModel", back_populates="agents")

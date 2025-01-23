@@ -30,6 +30,7 @@ from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.auth import auth
 from src.aws_utils import S3Client
 from src.db.api import (
+    get_agent_documents,
     get_phone_call,
     get_phone_calls,
     insert_phone_call,
@@ -41,6 +42,7 @@ from src.helixion_types import (
     BROWSER_NAME,
     AiMessageEventTypes,
     BarHeight,
+    Document,
     PhoneCallMetadata,
     PhoneCallStatus,
     SerializedUUID,
@@ -169,12 +171,19 @@ async def call_stream(
     ):
         raise HTTPException(status_code=400, detail="Phone call not queued")
 
+    document_models = await get_agent_documents(phone_call.agent.base_id, db)
+    documents = [
+        Document.model_validate(document_model)
+        for document_model in document_models
+    ]
+
     async with AiCaller(
         user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
         audio_format="g711_ulaw",
         start_speaking_buffer_ms=500,
+        documents=documents,
     ) as ai:
         ai.attach_queue(call_messages[phone_call_id])
         call_router = CallRouter(cast(str, phone_call.call_sid), ai)

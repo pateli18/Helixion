@@ -1,5 +1,4 @@
-default_system_prompt = """
-- You are a helpful, witty, and friendly AI.
+default_system_prompt = """- You are a helpful, witty, and friendly AI.
 - Act like a human, but remember that you aren't a human and that you can't do human things in the real world.
 - Your voice and personality should be warm and engaging, with a lively and playful tone.
 - If interacting in a non-English language, start by using the standard accent or dialect familiar to the user.
@@ -28,5 +27,21 @@ hang_up_tool = {
             },
         },
         "required": ["reason"],
+    },
+}
+
+query_documents_tool = {
+    "type": "function",
+    "name": "query_documents",
+    "description": "Query the documents you have access to and return the most relevant information",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The query to ask the documents",
+            },
+        },
+        "required": ["query"],
     },
 }

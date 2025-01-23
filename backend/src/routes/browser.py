@@ -10,13 +10,19 @@ from src.ai.caller import AiCaller
 from src.audio.audio_router import BrowserRouter
 from src.auth import auth
 from src.db.api import (
+    get_agent_documents,
     get_phone_call,
     insert_phone_call,
     insert_phone_call_event,
 )
 from src.db.base import get_session
 from src.db.converter import convert_phone_call_model
-from src.helixion_types import BROWSER_NAME, PhoneCallStatus, SerializedUUID
+from src.helixion_types import (
+    BROWSER_NAME,
+    Document,
+    PhoneCallStatus,
+    SerializedUUID,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +91,14 @@ async def call_stream(
     if phone_call.status != PhoneCallStatus.queued:
         raise HTTPException(status_code=400, detail="Phone call not queued")
 
+    document_models = await get_agent_documents(
+        phone_call_model.agent.base_id, db
+    )
+    documents = [
+        Document.model_validate(document_model)
+        for document_model in document_models
+    ]
+
     await websocket.accept()
     async with AiCaller(
         user_info=phone_call.input_data,
@@ -92,6 +106,7 @@ async def call_stream(
         phone_call_id=phone_call_id,
         audio_format="pcm16",
         start_speaking_buffer_ms=500,
+        documents=documents,
     ) as ai:
         call_router = BrowserRouter(ai)
         await asyncio.gather(

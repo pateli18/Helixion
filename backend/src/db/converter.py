@@ -1,8 +1,10 @@
 from typing import Optional, cast
 
-from src.db.models import PhoneCallModel
+from src.db.models import AgentModel, PhoneCallModel
 from src.helixion_types import (
+    Agent,
     AgentMetadata,
+    DocumentMetadata,
     PhoneCallMetadata,
     PhoneCallStatus,
     SerializedUUID,
@@ -41,4 +43,22 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
             name=phone_call.agent.name,
             version_id=phone_call.agent.id,
         ),
+    )
+
+
+def convert_agent_model(agent: AgentModel) -> Agent:
+    return Agent(
+        base_id=cast(SerializedUUID, agent.base_id),
+        name=cast(str, agent.name),
+        id=cast(SerializedUUID, agent.id),
+        created_at=agent.created_at,
+        system_message=cast(str, agent.system_message),
+        active=cast(bool, agent.active),
+        document_metadata=[
+            DocumentMetadata(
+                id=cast(SerializedUUID, document.document.id),
+                name=cast(str, document.document.name),
+            )
+            for document in agent.documents
+        ],
     )

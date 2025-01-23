@@ -208,6 +208,11 @@ class PhoneCallStatus(str, Enum):
     no_answer = "no-answer"
 
 
+class DocumentMetadata(BaseModel):
+    id: SerializedUUID
+    name: str
+
+
 class AgentMetadata(BaseModel):
     base_id: SerializedUUID
     name: str
@@ -255,9 +260,17 @@ class Agent(AgentBase):
 
     id: SerializedUUID
     created_at: SerializedDateTime
+    document_metadata: list[DocumentMetadata]
 
 
 class AiMessageEventTypes(str, Enum):
     speaker = "speaker"
     call_end = "call_end"
     audio = "audio"
+
+
+class Document(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: SerializedUUID
+    name: str
+    text: str

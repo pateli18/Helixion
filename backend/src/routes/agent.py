@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from src.ai.api import send_openai_request
 from src.ai.prompts import default_system_prompt, sample_details_prompt
 from src.auth import auth
-from src.db.api import get_agents, insert_agent
+from src.db.api import get_agent, get_agents, insert_agent
 from src.db.base import get_session
+from src.db.converter import convert_agent_model
 from src.helixion_types import (
     Agent,
     AgentBase,
@@ -39,7 +40,7 @@ async def retrieve_all_agents(
     db: async_scoped_session = Depends(get_session),
 ) -> list[Agent]:
     agents = await get_agents(db)
-    return [Agent.model_validate(agent) for agent in agents]
+    return [convert_agent_model(agent) for agent in agents]
 
 
 @router.post(
@@ -51,8 +52,9 @@ async def create_new_agent_version(
     request: AgentBase,
     db: async_scoped_session = Depends(get_session),
 ) -> Agent:
-    new_agent_model = await insert_agent(request, db)
-    response = Agent.model_validate(new_agent_model)
+    new_agent_id = await insert_agent(request, db)
+    new_agent_model = await get_agent(new_agent_id, db)
+    response = convert_agent_model(new_agent_model)
     await db.commit()
     return response
 
@@ -71,7 +73,7 @@ async def create_agent(
     db: async_scoped_session = Depends(get_session),
 ) -> Agent:
     base_id = uuid4()
-    agent_model = await insert_agent(
+    agent_id = await insert_agent(
         AgentBase(
             name=request.name,
             system_message=default_system_prompt,
@@ -80,8 +82,10 @@ async def create_agent(
         ),
         db,
     )
+    new_agent_model = await get_agent(agent_id, db)
+    response = convert_agent_model(new_agent_model)
     await db.commit()
-    return Agent.model_validate(agent_model)
+    return response
 
 
 class SampleDetailsRequest(BaseModel):

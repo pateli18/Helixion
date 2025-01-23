@@ -23,13 +23,14 @@ import websockets
 from pydantic import BaseModel, Field
 from pydantic.json import pydantic_encoder
 
-from src.ai.prompts import hang_up_tool
+from src.ai.prompts import hang_up_tool, query_documents_tool
 from src.aws_utils import S3Client
 from src.db.api import update_phone_call
 from src.db.base import async_session_scope
 from src.helixion_types import (
     AiMessageEventTypes,
     AudioFormat,
+    Document,
     ModelType,
     SerializedUUID,
     Speaker,
@@ -64,12 +65,15 @@ class AiSessionConfiguration(BaseModel):
         user_info: dict,
         audio_format: AudioFormat,
         include_hang_up_tool: bool,
+        include_query_documents_tool: bool,
     ) -> "AiSessionConfiguration":
         system_message = system_prompt.format(**user_info)
 
         tools = []
         if include_hang_up_tool:
             tools.append(hang_up_tool)
+        if include_query_documents_tool:
+            tools.append(query_documents_tool)
 
         return cls(
             turn_detection=TurnDetection(),
@@ -161,13 +165,21 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         phone_call_id: SerializedUUID,
         audio_format: AudioFormat = "g711_ulaw",
         start_speaking_buffer_ms: Optional[int] = None,
+        documents: Optional[list[Document]] = None,
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
         self._log_file: Optional[str] = None
         self._audio_format = audio_format
+
+        self.documents = documents or []
+
         self.session_configuration = AiSessionConfiguration.default(
-            system_prompt, user_info, self._audio_format, True
+            system_prompt,
+            user_info,
+            self._audio_format,
+            True,
+            len(self.documents) > 0,
         )
         self._sampling_rate = 24000 if self._audio_format == "pcm16" else 8000
         self._bytes_per_sample = 2 if self._audio_format == "pcm16" else 1
@@ -280,6 +292,24 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             "audio_end_ms": audio_end_ms,
         }
         await self.send_message(json.dumps(truncate_event))
+
+    async def receive_tool_call_result(
+        self,
+        previous_item_id: str,
+        call_id: str,
+        output: str,
+    ):
+        tool_call_result_event = {
+            "type": "conversation.item.create",
+            "previous_item_id": previous_item_id,
+            "item": {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": output,
+            },
+        }
+        await self.send_message(json.dumps(tool_call_result_event))
+        await self._start_speaking_message()
 
     def _audio_ms(self, audio_b64: str) -> int:
         audio_bytes = base64.b64decode(audio_b64)

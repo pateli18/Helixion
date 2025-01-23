@@ -44,4 +44,10 @@ export type Agent = {
   base_id: string;
   active: boolean;
   created_at: string;
+  document_metadata: DocumentMetadata[];
+};
+
+export type DocumentMetadata = {
+  id: string;
+  name: string;
 };
