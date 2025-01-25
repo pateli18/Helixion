@@ -10,11 +10,13 @@ import {
   SidebarGroupLabel,
   SidebarGroupContent,
   useSidebar,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { PersonIcon } from "@radix-ui/react-icons";
 import { ArchiveIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { UserNav } from "./UserNav";
 
 const SidebarItem = (props: {
   icon: React.ReactNode;
@@ -75,6 +77,9 @@ export const PageSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <UserNav />
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
