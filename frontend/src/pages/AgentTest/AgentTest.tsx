@@ -3,13 +3,21 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { browserCall, getSampleDetails, outboundCall } from "@/utils/apiCalls";
+import {
+  browserCall,
+  getAgents,
+  getSampleDetails,
+  outboundCall,
+} from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AgentConfiguration } from "./AgentConfiguration";
 import { Badge } from "@/components/ui/badge";
 import { useAuthInfo } from "@propelauth/react";
+import { LoadingView } from "@/components/Loader";
+import { useSearchParams } from "react-router-dom";
+import { Agent } from "@/types";
 
 const CallPhoneNumber = (props: {
   handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
@@ -198,34 +206,92 @@ const Dialer = (props: {
 };
 
 export const AgentTestPage = () => {
+  const authInfo = useAuthInfo();
   const [sampleFields, setSampleFields] = useState<Record<string, string>>({});
   const [agentId, setAgentId] = useState<{
     baseId: string;
     versionId: string;
   } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [agents, setAgents] = useState<Agent[]>([]);
+
+  // Update URL when agentId changes
+  useEffect(() => {
+    if (agentId) {
+      setSearchParams(
+        {
+          baseId: agentId.baseId,
+          versionId: agentId.versionId,
+        },
+        { replace: true }
+      );
+    }
+  }, [agentId]);
+
+  useEffect(() => {
+    getAgents(authInfo.accessToken ?? null).then((response) => {
+      setIsLoading(false);
+      if (response !== null) {
+        setAgents(response);
+
+        // Handle URL parameters
+        const baseId = searchParams.get("baseId");
+        const versionId = searchParams.get("versionId");
+        if (baseId && versionId) {
+          const matchingAgent = response.find(
+            (agent) => agent.id === versionId && agent.base_id === baseId
+          );
+          if (matchingAgent) {
+            setAgentId({
+              baseId: matchingAgent.base_id,
+              versionId: matchingAgent.id,
+            });
+            return;
+          }
+        }
+
+        // If no valid URL parameters or agent not found, select first agent
+        if (agentId === null && response.length > 0) {
+          setAgentId({
+            baseId: response[0].base_id,
+            versionId: response[0].id,
+          });
+        }
+      } else {
+        toast.error("Failed to fetch agents");
+      }
+    });
+  }, []);
 
   return (
     <Layout title="Agent Tester">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <AgentConfiguration
-          agentId={agentId}
-          setAgentId={setAgentId}
-          setSampleFields={setSampleFields}
-        />
-        {agentId === null ? (
-          <div className="flex items-center justify-center">
-            <div className="text-md text-gray-500">
-              Select an agent to start a call
-            </div>
-          </div>
-        ) : (
-          <Dialer
+      {isLoading ? (
+        <LoadingView text="Loading agents..." />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <AgentConfiguration
             agentId={agentId}
-            sampleFields={sampleFields}
+            setAgentId={setAgentId}
             setSampleFields={setSampleFields}
+            agents={agents}
+            setAgents={setAgents}
           />
-        )}
-      </div>
+          {agentId === null ? (
+            <div className="flex items-center justify-center">
+              <div className="text-md text-gray-500">
+                Select an agent to start a call
+              </div>
+            </div>
+          ) : (
+            <Dialer
+              agentId={agentId}
+              sampleFields={sampleFields}
+              setSampleFields={setSampleFields}
+            />
+          )}
+        </div>
+      )}
     </Layout>
   );
 };

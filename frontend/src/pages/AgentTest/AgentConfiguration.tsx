@@ -53,7 +53,7 @@ const CreateNewAgentModal = (props: {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
+      <DialogTrigger asChild>
         <Button>
           <PlusIcon className="w-4 h-4 mr-2" />
           Create New Agent
@@ -86,64 +86,17 @@ interface AgentConfigurationProps {
   } | null;
   setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
   setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  agents: Agent[];
+  setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
 }
 
 export const AgentConfiguration = (props: AgentConfigurationProps) => {
   const authInfo = useAuthInfo();
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeAgent = agents.find(
+  const activeAgent = props.agents.find(
     (agent) => agent.id === props.agentId?.versionId
   );
-
-  // Update URL when agentId changes
-  useEffect(() => {
-    if (props.agentId) {
-      setSearchParams(
-        {
-          baseId: props.agentId.baseId,
-          versionId: props.agentId.versionId,
-        },
-        { replace: true }
-      );
-    }
-  }, [props.agentId]);
-
-  useEffect(() => {
-    getAgents(authInfo.accessToken ?? null).then((response) => {
-      if (response !== null) {
-        setAgents(response);
-
-        // Handle URL parameters
-        const baseId = searchParams.get("baseId");
-        const versionId = searchParams.get("versionId");
-        if (baseId && versionId) {
-          const matchingAgent = response.find(
-            (agent) => agent.id === versionId && agent.base_id === baseId
-          );
-          if (matchingAgent) {
-            props.setAgentId({
-              baseId: matchingAgent.base_id,
-              versionId: matchingAgent.id,
-            });
-            return;
-          }
-        }
-
-        // If no valid URL parameters or agent not found, select first agent
-        if (props.agentId === null && response.length > 0) {
-          props.setAgentId({
-            baseId: response[0].base_id,
-            versionId: response[0].id,
-          });
-        }
-      } else {
-        toast.error("Failed to fetch agents");
-      }
-    });
-  }, []);
 
   useEffect(() => {
     if (activeAgent) {
@@ -163,7 +116,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
       );
       setSaveLoading(false);
       if (response !== null) {
-        setAgents((prev) => {
+        props.setAgents((prev) => {
           const newAgents = [
             response,
             ...prev.map((agent) => ({ ...agent, active: false })),
@@ -208,7 +161,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         <Select
           value={props.agentId?.baseId}
           onValueChange={(value) => {
-            const agent = agents.find((agent) => agent.base_id === value);
+            const agent = props.agents.find((agent) => agent.base_id === value);
             if (agent) {
               props.setAgentId({
                 baseId: agent.base_id,
@@ -225,7 +178,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           </SelectTrigger>
           <SelectContent>
             <div className="overflow-y-scroll max-h-[200px]">
-              {agents
+              {props.agents
                 .filter((agent) => agent.active)
                 .map((agent) => (
                   <SelectItem key={agent.base_id} value={agent.base_id}>
@@ -236,7 +189,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           </SelectContent>
         </Select>
         <CreateNewAgentModal
-          setAgents={setAgents}
+          setAgents={props.setAgents}
           setAgentId={props.setAgentId}
         />
       </div>
@@ -245,7 +198,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         <Select
           value={props.agentId?.versionId}
           onValueChange={(value) => {
-            const agent = agents.find(
+            const agent = props.agents.find(
               (agent) => agent.base_id === props.agentId?.baseId
             );
             if (agent) {
@@ -265,7 +218,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           </SelectTrigger>
           <SelectContent>
             <div className="overflow-y-scroll max-h-[200px]">
-              {agents
+              {props.agents
                 .filter((agent) => agent.base_id === props.agentId?.baseId)
                 .map((version) => (
                   <SelectItem key={version.id} value={version.id}>
