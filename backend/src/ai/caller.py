@@ -32,6 +32,7 @@ from src.helixion_types import (
     AudioFormat,
     Document,
     ModelType,
+    PhoneCallEndReason,
     SerializedUUID,
     Speaker,
     SpeakerSegment,
@@ -218,7 +219,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
     async def __aexit__(self, exc_type, exc, tb):
         await self._exit_stack.__aexit__(exc_type, exc, tb)
-        await self.close()
+        await self.close(PhoneCallEndReason.unknown)
 
     def attach_queue(self, queue: AiMessageQueue):
         self._message_queue = queue
@@ -449,7 +450,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
         return response
 
-    async def close(self) -> tuple[SerializedUUID, int]:
+    async def close(
+        self, phone_call_end_reason: PhoneCallEndReason
+    ) -> tuple[SerializedUUID, int]:
         if self._cleanup_started:
             logger.info("Cleanup already started")
             return self._phone_call_id, self._audio_total_buffer_ms
@@ -475,6 +478,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             await update_phone_call(
                 self._phone_call_id,
                 s3_filepath,
+                phone_call_end_reason,
                 db,
             )
         # delete the file

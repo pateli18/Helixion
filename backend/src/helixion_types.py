@@ -276,3 +276,10 @@ class Document(BaseModel):
     id: SerializedUUID
     name: str
     text: str
+
+
+class PhoneCallEndReason(str, Enum):
+    end_of_call_bot = "end_of_call_bot"
+    voice_mail_bot = "voice_mail_bot"
+    user_hangup = "user_hangup"
+    unknown = "unknown"

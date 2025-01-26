@@ -14,7 +14,7 @@ from src.ai.caller import AiCaller
 from src.ai.document_query import query_documents
 from src.db.api import insert_phone_call_event
 from src.db.base import async_session_scope
-from src.helixion_types import PhoneCallStatus
+from src.helixion_types import PhoneCallEndReason, PhoneCallStatus
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ class CallRouter:
     mark_queue: list[int]
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
+    hang_up_reason: Optional[PhoneCallEndReason]
 
     def __init__(self, call_sid: str, ai_caller: AiCaller):
         self.call_sid = call_sid
@@ -46,10 +47,12 @@ class CallRouter:
         self.mark_queue_elapsed_time = 0
         self.inter_mark_elapsed_time = 0
         self.ai_caller = ai_caller
-        self._hang_up_requested = False
+        self._hang_up_reason = None
 
     async def _cleanup(self) -> None:
-        await self.ai_caller.close()
+        await self.ai_caller.close(
+            self._hang_up_reason or PhoneCallEndReason.unknown
+        )
         hang_up_phone_call(self.call_sid)
         logger.info("Cleanup complete")
 
@@ -60,13 +63,18 @@ class CallRouter:
                     if message["name"] == "hang_up":
                         arguments = json.loads(message["arguments"])
                         if arguments["reason"] == "answering_machine":
+                            self._hang_up_reason = (
+                                PhoneCallEndReason.voice_mail_bot
+                            )
                             logger.info(
                                 "Answering machine detected, not leaving a message"
                             )
                             break
                         else:
-                            self._hang_up_requested = True
-                            logger.info("Hang up requested")
+                            self._hang_up_reason = (
+                                PhoneCallEndReason.end_of_call_bot
+                            )
+                            logger.info("Hang up requested by bot")
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]
@@ -161,7 +169,7 @@ class CallRouter:
                             else None
                         )
                         if (
-                            self._hang_up_requested
+                            self._hang_up_reason is not None
                             and len(self.mark_queue) == 0
                         ):
                             logger.info(
@@ -170,6 +178,7 @@ class CallRouter:
                             break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
+            self._hang_up_reason = PhoneCallEndReason.user_hangup
         except Exception:
             logger.exception("Error receiving from human")
         finally:
@@ -181,13 +190,14 @@ class BrowserRouter:
     mark_queue: list[int]
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
+    hang_up_reason: Optional[PhoneCallEndReason]
 
     def __init__(self, ai_caller: AiCaller):
         self.last_ai_item_id = None
         self.mark_queue = []
         self.mark_queue_elapsed_time = 0
         self.ai_caller = ai_caller
-        self._hang_up_requested = False
+        self._hang_up_reason = None
         self._cleanup_started = False
 
     async def _cleanup(self) -> None:
@@ -195,7 +205,10 @@ class BrowserRouter:
             logger.info("Cleanup already started")
             return
         self._cleanup_started = True
-        phone_call_id, duration = await self.ai_caller.close()
+        logger.info(f"Closing call with reason: {self._hang_up_reason}")
+        phone_call_id, duration = await self.ai_caller.close(
+            self._hang_up_reason or PhoneCallEndReason.unknown
+        )
         async with async_session_scope() as db:
             await insert_phone_call_event(
                 phone_call_id,
@@ -212,7 +225,19 @@ class BrowserRouter:
             async for message in self.ai_caller:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
-                        self._hang_up_requested = True
+                        arguments = json.loads(message["arguments"])
+                        if arguments["reason"] == "answering_machine":
+                            self._hang_up_reason = (
+                                PhoneCallEndReason.voice_mail_bot
+                            )
+                            logger.info(
+                                "Answering machine detected, not leaving a message"
+                            )
+                        else:
+                            self._hang_up_reason = (
+                                PhoneCallEndReason.end_of_call_bot
+                            )
+                            logger.info("Hang up requested by bot")
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]
@@ -316,7 +341,7 @@ class BrowserRouter:
                             else None
                         )
                         if (
-                            self._hang_up_requested
+                            self._hang_up_reason is not None
                             and len(self.mark_queue) == 0
                         ):
                             logger.info(
@@ -324,10 +349,12 @@ class BrowserRouter:
                             )
                             break
                 elif data["event"] == "hangup":
-                    logger.info("Hang up requested")
+                    logger.info("Hang up requested by user")
+                    self._hang_up_reason = PhoneCallEndReason.user_hangup
                     break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
+            self._hang_up_reason = PhoneCallEndReason.user_hangup
         except Exception:
             logger.exception("Error receiving from human")
         finally:

@@ -13,7 +13,7 @@ from src.db.models import (
     PhoneCallModel,
     UserModel,
 )
-from src.helixion_types import AgentBase, SerializedUUID
+from src.helixion_types import AgentBase, PhoneCallEndReason, SerializedUUID
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +68,16 @@ async def insert_phone_call_event(
 async def update_phone_call(
     phone_call_id: SerializedUUID,
     call_data: str,
+    phone_call_end_reason: PhoneCallEndReason,
     db: async_scoped_session,
 ) -> None:
     await db.execute(
         update(PhoneCallModel)
         .where(PhoneCallModel.id == phone_call_id)
-        .values(call_data=call_data)
+        .values(
+            call_data=call_data,
+            end_reason=phone_call_end_reason.value,
+        )
     )
 
 
