@@ -12,7 +12,10 @@ import {
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AgentConfiguration } from "./AgentConfiguration";
+import {
+  AgentConfiguration,
+  extractNewFieldsFromSystemMessage,
+} from "./AgentConfiguration";
 import { Badge } from "@/components/ui/badge";
 import { useAuthInfo } from "@propelauth/react";
 import { LoadingView } from "@/components/Loader";
@@ -138,7 +141,10 @@ const Dialer = (props: {
   const handleGetSampleValues = async () => {
     setSampleDetailsLoading(true);
     const response = await getSampleValues(
-      Object.keys(props.activeAgent.sample_values),
+      extractNewFieldsFromSystemMessage(
+        props.activeAgent.system_message,
+        props.activeAgent.sample_values
+      ),
       authInfo.accessToken ?? null
     );
     if (response === null) {

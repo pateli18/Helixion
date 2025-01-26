@@ -31,7 +31,7 @@ const extractFieldsFromSystemMessage = (value: string) => {
   return fields;
 };
 
-const extractNewFieldsFromSystemMessage = (
+export const extractNewFieldsFromSystemMessage = (
   value: string,
   existingRecord: Record<string, string>
 ) => {

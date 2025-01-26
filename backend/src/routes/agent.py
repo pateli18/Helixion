@@ -106,5 +106,7 @@ class SampleValuesRequest(BaseModel):
 async def get_sample_values(
     request: SampleValuesRequest,
 ) -> dict:
+    if len(request.fields) == 0:
+        return {}
     output = await generate_sample_values(request.fields)
     return output
