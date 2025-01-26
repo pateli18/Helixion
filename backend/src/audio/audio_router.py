@@ -123,20 +123,27 @@ class CallRouter:
         finally:
             await self._cleanup()
 
+    async def _truncate_audio_message(self) -> None:
+        if self.last_ai_item_id is not None:
+            if self.inter_mark_start_time is not None:
+                self.inter_mark_elapsed_time = (
+                    int(time.time() * 1000) - self.inter_mark_start_time
+                )
+                self.mark_queue_elapsed_time += min(
+                    self.inter_mark_elapsed_time,
+                    (
+                        self.mark_queue[0]
+                        if len(self.mark_queue) > 0
+                        else self.inter_mark_elapsed_time
+                    ),
+                )
+            await self.ai_caller.truncate_message(
+                self.last_ai_item_id, self.mark_queue_elapsed_time
+            )
+
     async def handle_speech_started(self, websocket: WebSocket):
         if len(self.mark_queue) > 0:
-            if self.last_ai_item_id is not None:
-                if self.inter_mark_start_time is not None:
-                    self.inter_mark_elapsed_time = (
-                        int(time.time() * 1000) - self.inter_mark_start_time
-                    )
-                    self.mark_queue_elapsed_time += min(
-                        self.inter_mark_elapsed_time, self.mark_queue[0]
-                    )
-                await self.ai_caller.truncate_message(
-                    self.last_ai_item_id, self.mark_queue_elapsed_time
-                )
-
+            await self._truncate_audio_message()
             await websocket.send_json(
                 {"event": "clear", "streamSid": self.stream_sid}
             )
@@ -179,6 +186,7 @@ class CallRouter:
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
             self._hang_up_reason = PhoneCallEndReason.user_hangup
+            await self._truncate_audio_message()
         except Exception:
             logger.exception("Error receiving from human")
         finally:
@@ -299,20 +307,27 @@ class BrowserRouter:
                 await websocket.close()
             logger.info("Closed connection to human")
 
+    async def _truncate_audio_message(self) -> None:
+        if self.last_ai_item_id is not None:
+            if self.inter_mark_start_time is not None:
+                self.inter_mark_elapsed_time = (
+                    int(time.time() * 1000) - self.inter_mark_start_time
+                )
+                self.mark_queue_elapsed_time += min(
+                    self.inter_mark_elapsed_time,
+                    (
+                        self.mark_queue[0]
+                        if len(self.mark_queue) > 0
+                        else self.inter_mark_elapsed_time
+                    ),
+                )
+            await self.ai_caller.truncate_message(
+                self.last_ai_item_id, self.mark_queue_elapsed_time
+            )
+
     async def handle_speech_started(self, websocket: WebSocket):
         if len(self.mark_queue) > 0:
-            if self.last_ai_item_id is not None:
-                if self.inter_mark_start_time is not None:
-                    self.inter_mark_elapsed_time = (
-                        int(time.time() * 1000) - self.inter_mark_start_time
-                    )
-                    self.mark_queue_elapsed_time += min(
-                        self.inter_mark_elapsed_time, self.mark_queue[0]
-                    )
-                await self.ai_caller.truncate_message(
-                    self.last_ai_item_id, self.mark_queue_elapsed_time
-                )
-
+            await self._truncate_audio_message()
             await websocket.send_json({"event": "clear"})
 
             self.mark_queue.clear()
@@ -351,10 +366,13 @@ class BrowserRouter:
                 elif data["event"] == "hangup":
                     logger.info("Hang up requested by user")
                     self._hang_up_reason = PhoneCallEndReason.user_hangup
+                    await self._truncate_audio_message()
                     break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
-            self._hang_up_reason = PhoneCallEndReason.user_hangup
+            if self._hang_up_reason is None:
+                self._hang_up_reason = PhoneCallEndReason.user_hangup
+                await self._truncate_audio_message()
         except Exception:
             logger.exception("Error receiving from human")
         finally:
