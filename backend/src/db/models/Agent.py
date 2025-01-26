@@ -1,5 +1,5 @@
 from sqlalchemy import VARCHAR, Boolean, Column, ForeignKey, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from src.db.base import Base
@@ -18,6 +18,7 @@ class AgentModel(Base, TimestampMixin):
     system_message = Column(VARCHAR, nullable=False)
     base_id = Column(UUID(as_uuid=True), nullable=False)
     active = Column(Boolean, nullable=False)
+    sample_values = Column(JSONB, nullable=True)
 
     phone_calls = relationship("PhoneCallModel", back_populates="agent")
     documents = relationship(

@@ -10,16 +10,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Agent } from "@/types";
-import {
-  getAgents,
-  createNewAgentVersion,
-  createAgent,
-} from "@/utils/apiCalls";
+import { createNewAgentVersion, createAgent } from "@/utils/apiCalls";
 import { loadAndFormatDate } from "@/utils/dateFormat";
 import { PlusIcon, ReloadIcon } from "@radix-ui/react-icons";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router-dom";
 import { useAuthInfo } from "@propelauth/react";
 import {
   Dialog,
@@ -28,6 +23,21 @@ import {
   DialogContent,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+const extractFieldsFromSystemMessage = (value: string) => {
+  // Extract all fields surrounded by {}
+  const fields =
+    value.match(/\{([^}]+)\}/g)?.map((field) => field.slice(1, -1)) || [];
+  return fields;
+};
+
+const extractNewFieldsFromSystemMessage = (
+  value: string,
+  existingRecord: Record<string, string>
+) => {
+  const fields = extractFieldsFromSystemMessage(value);
+  return fields.filter((field) => !(field in existingRecord));
+};
 
 const CreateNewAgentModal = (props: {
   setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
@@ -85,33 +95,26 @@ interface AgentConfigurationProps {
     versionId: string;
   } | null;
   setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
-  setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   agents: Agent[];
   setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
+  activeAgent?: Agent;
 }
 
 export const AgentConfiguration = (props: AgentConfigurationProps) => {
   const authInfo = useAuthInfo();
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
-  const activeAgent = props.agents.find(
-    (agent) => agent.id === props.agentId?.versionId
-  );
-
-  useEffect(() => {
-    if (activeAgent) {
-      extractFields(activeAgent.system_message);
-    }
-  }, [activeAgent?.id]);
 
   const handleSaveVersion = async () => {
     if (newVersion) {
       setSaveLoading(true);
-      const response = await createNewAgentVersion(
-        newVersion.name,
+      const newFields = extractNewFieldsFromSystemMessage(
         newVersion.system_message,
-        newVersion.base_id,
-        newVersion.active,
+        props.activeAgent?.sample_values ?? {}
+      );
+      const response = await createNewAgentVersion(
+        newVersion,
+        newFields,
         authInfo.accessToken ?? null
       );
       setSaveLoading(false);
@@ -127,31 +130,12 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           baseId: response.base_id,
           versionId: response.id,
         });
-        extractFields(response.system_message);
         setNewVersion(null);
         toast.success("Version saved");
       } else {
         toast.error("Failed to save version");
       }
     }
-  };
-
-  const extractFields = (value: string) => {
-    // Extract all fields surrounded by {}
-    const fields =
-      value.match(/\{([^}]+)\}/g)?.map((field) => field.slice(1, -1)) || [];
-
-    // Update sample fields
-    props.setSampleFields((prev) => {
-      const newFields: Record<string, string> = {};
-
-      // Add fields in order of appearance, preserving existing values
-      fields.forEach((field) => {
-        newFields[field] = field in prev ? prev[field] : "";
-      });
-
-      return newFields;
-    });
   };
 
   return (
@@ -171,7 +155,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           }}
         >
           <SelectTrigger
-            disabled={props.agentId === null}
+            disabled={props.activeAgent === undefined}
             className="truncate text-ellipsis"
           >
             <SelectValue placeholder="Select Agent" />
@@ -211,7 +195,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           }}
         >
           <SelectTrigger
-            disabled={activeAgent === undefined}
+            disabled={props.activeAgent === null}
             className="truncate text-ellipsis"
           >
             <SelectValue placeholder="Select Agent Version" />
@@ -242,7 +226,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         <div className="font-bold text-sm">Name</div>
         <Input
           placeholder="Enter Agent Name"
-          value={(newVersion?.name ?? activeAgent?.name) || ""}
+          value={(newVersion?.name ?? props.activeAgent?.name) || ""}
           onChange={(e) => {
             setNewVersion((prev) => {
               if (prev) {
@@ -252,18 +236,19 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
                 };
               }
               return {
-                ...activeAgent!,
+                ...props.activeAgent!,
                 name: e.target.value,
               };
             });
           }}
-          disabled={activeAgent === undefined}
+          disabled={props.activeAgent === undefined}
         />
       </div>
       <div className="font-bold text-sm">Instructions</div>
       <HighlightedTextarea
         value={
-          (newVersion?.system_message ?? activeAgent?.system_message) || ""
+          (newVersion?.system_message ?? props.activeAgent?.system_message) ||
+          ""
         }
         onChange={(value) => {
           setNewVersion((prev) => {
@@ -274,14 +259,14 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
               };
             }
             return {
-              ...activeAgent!,
+              ...props.activeAgent!,
               system_message: value,
             };
           });
         }}
       />
       <div className="flex flex-wrap gap-2">
-        {activeAgent?.document_metadata.map((document) => (
+        {props.activeAgent?.document_metadata.map((document) => (
           <Badge variant="secondary" key={document.id}>
             {document.name}
           </Badge>

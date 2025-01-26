@@ -45,6 +45,7 @@ export type Agent = {
   active: boolean;
   created_at: string;
   document_metadata: DocumentMetadata[];
+  sample_values: Record<string, string>;
 };
 
 export type DocumentMetadata = {

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   browserCall,
   getAgents,
-  getSampleDetails,
+  getSampleValues,
   outboundCall,
 } from "@/utils/apiCalls";
 import { ReloadIcon } from "@radix-ui/react-icons";
@@ -98,12 +98,8 @@ const SampleField = (props: {
 };
 
 const Dialer = (props: {
-  agentId: {
-    baseId: string;
-    versionId: string;
-  };
-  sampleFields: Record<string, string>;
-  setSampleFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  activeAgent: Agent;
+  setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
 }) => {
   const authInfo = useAuthInfo();
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
@@ -113,10 +109,8 @@ const Dialer = (props: {
   const handleCallPhoneNumber = async (phoneNumber: string) => {
     const response = await outboundCall(
       phoneNumber,
-      props.agentId.versionId,
-      {
-        ...props.sampleFields,
-      },
+      props.activeAgent?.id ?? "",
+      props.activeAgent?.sample_values ?? {},
       authInfo.accessToken ?? null
     );
     if (response === null) {
@@ -129,8 +123,8 @@ const Dialer = (props: {
   const handleCallBrowser = async () => {
     setBrowserCallLoading(true);
     const response = await browserCall(
-      props.agentId.versionId,
-      props.sampleFields,
+      props.activeAgent.id,
+      props.activeAgent.sample_values,
       authInfo.accessToken ?? null
     );
     if (response === null) {
@@ -141,18 +135,46 @@ const Dialer = (props: {
     setBrowserCallLoading(false);
   };
 
-  const handleGetSampleDetails = async () => {
+  const handleGetSampleValues = async () => {
     setSampleDetailsLoading(true);
-    const response = await getSampleDetails(
-      Object.keys(props.sampleFields),
+    const response = await getSampleValues(
+      Object.keys(props.activeAgent.sample_values),
       authInfo.accessToken ?? null
     );
     if (response === null) {
       toast.error("Failed to get sample details, please try again");
     } else {
-      props.setSampleFields(response);
+      props.setAgents((prev) => {
+        const newAgents = [...prev];
+        const agentIndex = newAgents.findIndex(
+          (agent) => agent.id === props.activeAgent.id
+        );
+        newAgents[agentIndex] = {
+          ...props.activeAgent,
+          sample_values: response,
+        };
+        return newAgents;
+      });
     }
     setSampleDetailsLoading(false);
+  };
+
+  const handleClearValues = () => {
+    props.setAgents((prev) => {
+      const newAgents = [...prev];
+      const agentIndex = newAgents.findIndex(
+        (agent) => agent.id === props.activeAgent.id
+      );
+      // Create new sample_values object with same keys but empty values
+      const clearedValues = Object.fromEntries(
+        Object.keys(props.activeAgent.sample_values).map((key) => [key, ""])
+      );
+      newAgents[agentIndex] = {
+        ...props.activeAgent,
+        sample_values: clearedValues,
+      };
+      return newAgents;
+    });
   };
 
   return (
@@ -171,7 +193,7 @@ const Dialer = (props: {
         <div className="text-md text-gray-500">Enter Details</div>
         <Badge
           variant="secondary"
-          onClick={handleGetSampleDetails}
+          onClick={handleGetSampleValues}
           className="cursor-pointer hover:bg-gray-200"
         >
           Auto-Populate
@@ -179,17 +201,39 @@ const Dialer = (props: {
             <ReloadIcon className="ml-2 w-2 h-2 animate-spin" />
           )}
         </Badge>
+        <Badge
+          variant="secondary"
+          onClick={handleClearValues}
+          className="cursor-pointer hover:bg-gray-200"
+        >
+          Clear
+        </Badge>
       </div>
-      {Object.entries(props.sampleFields).map(([key, value]) => (
-        <SampleField
-          key={key}
-          name={key}
-          value={value}
-          setValue={(newValue) => {
-            props.setSampleFields((prev) => ({ ...prev, [key]: newValue }));
-          }}
-        />
-      ))}
+      {Object.entries(props.activeAgent?.sample_values ?? {}).map(
+        ([key, value]) => (
+          <SampleField
+            key={key}
+            name={key}
+            value={value}
+            setValue={(newValue) => {
+              props.setAgents((prev) => {
+                const newAgents = [...prev];
+                const agentIndex = newAgents.findIndex(
+                  (agent) => agent.id === props.activeAgent.id
+                );
+                newAgents[agentIndex] = {
+                  ...props.activeAgent,
+                  sample_values: {
+                    ...props.activeAgent.sample_values,
+                    [key]: newValue,
+                  },
+                };
+                return newAgents;
+              });
+            }}
+          />
+        )
+      )}
       {phoneCallId === null && (
         <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
       )}
@@ -207,7 +251,6 @@ const Dialer = (props: {
 
 export const AgentTestPage = () => {
   const authInfo = useAuthInfo();
-  const [sampleFields, setSampleFields] = useState<Record<string, string>>({});
   const [agentId, setAgentId] = useState<{
     baseId: string;
     versionId: string;
@@ -215,6 +258,7 @@ export const AgentTestPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const activeAgent = agents.find((agent) => agent.id === agentId?.versionId);
 
   // Update URL when agentId changes
   useEffect(() => {
@@ -273,22 +317,18 @@ export const AgentTestPage = () => {
           <AgentConfiguration
             agentId={agentId}
             setAgentId={setAgentId}
-            setSampleFields={setSampleFields}
             agents={agents}
             setAgents={setAgents}
+            activeAgent={activeAgent}
           />
-          {agentId === null ? (
+          {activeAgent === undefined ? (
             <div className="flex items-center justify-center">
               <div className="text-md text-gray-500">
                 Select an agent to start a call
               </div>
             </div>
           ) : (
-            <Dialer
-              agentId={agentId}
-              sampleFields={sampleFields}
-              setSampleFields={setSampleFields}
-            />
+            <Dialer activeAgent={activeAgent} setAgents={setAgents} />
           )}
         </div>
       )}

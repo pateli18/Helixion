@@ -155,10 +155,8 @@ export const getAgents = async (accessToken: string | null) => {
 };
 
 export const createNewAgentVersion = async (
-  name: string,
-  systemMessage: string,
-  baseId: string,
-  active: boolean,
+  agent: Agent,
+  newFields: string[],
   accessToken: string | null
 ) => {
   let response = null;
@@ -167,10 +165,14 @@ export const createNewAgentVersion = async (
       url: `${baseUrl}/api/v1/agent/new-version`,
       method: "POST",
       body: {
-        name,
-        system_message: systemMessage,
-        base_id: baseId,
-        active,
+        agent_base: {
+          name: agent.name,
+          system_message: agent.system_message,
+          base_id: agent.base_id,
+          active: agent.active,
+          sample_values: agent.sample_values,
+        },
+        new_fields: newFields,
       },
       accessToken,
     });
@@ -197,14 +199,14 @@ export const createAgent = async (name: string, accessToken: string | null) => {
   return response;
 };
 
-export const getSampleDetails = async (
+export const getSampleValues = async (
   fields: string[],
   accessToken: string | null
 ) => {
   let response = null;
   try {
     response = await Ajax.req<Record<string, string>>({
-      url: `${baseUrl}/api/v1/agent/sample-details`,
+      url: `${baseUrl}/api/v1/agent/sample-values`,
       method: "POST",
       body: { fields },
       accessToken,

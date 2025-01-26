@@ -253,6 +253,7 @@ class AgentBase(BaseModel):
     system_message: str
     base_id: SerializedUUID
     active: bool
+    sample_values: dict
 
 
 class Agent(AgentBase):
@@ -261,6 +262,7 @@ class Agent(AgentBase):
     id: SerializedUUID
     created_at: SerializedDateTime
     document_metadata: list[DocumentMetadata]
+    test_values: Optional[dict] = None
 
 
 class AiMessageEventTypes(str, Enum):

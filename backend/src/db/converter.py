@@ -61,4 +61,5 @@ def convert_agent_model(agent: AgentModel) -> Agent:
             )
             for document in agent.documents
         ],
+        sample_values=cast(Optional[dict], agent.sample_values) or {},
     )
