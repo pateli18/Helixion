@@ -6,7 +6,7 @@ from typing import Optional, Union
 import websockets
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
-from fastapi.websockets import WebSocketState
+from fastapi.websockets import WebSocketDisconnect, WebSocketState
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
@@ -129,6 +129,8 @@ class CallRouter:
 
                 if message["type"] == "input_audio_buffer.speech_started":
                     await self.handle_speech_started(websocket)
+        except WebSocketDisconnect:
+            logger.info("Connection closed")
         except Exception:
             logger.exception("Error sending to human")
         finally:
@@ -321,7 +323,8 @@ class BrowserRouter:
                             ),
                         }
                     )
-
+        except WebSocketDisconnect:
+            logger.info("Connection closed")
         except Exception:
             logger.exception("Error sending to human")
         finally:
