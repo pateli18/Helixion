@@ -40,11 +40,11 @@ from src.db.base import get_session
 from src.db.converter import convert_phone_call_model, latest_phone_call_event
 from src.helixion_types import (
     BROWSER_NAME,
+    TERMINAL_PHONE_CALL_STATUSES,
     AiMessageEventTypes,
     BarHeight,
     Document,
     PhoneCallMetadata,
-    PhoneCallStatus,
     SerializedUUID,
     SpeakerSegment,
 )
@@ -99,13 +99,7 @@ async def status_webhook(
 
     # end live streams with terminal states
     if (
-        payload["CallStatus"]
-        in [
-            PhoneCallStatus.completed,
-            PhoneCallStatus.busy,
-            PhoneCallStatus.failed,
-            PhoneCallStatus.no_answer,
-        ]
+        payload["CallStatus"] in TERMINAL_PHONE_CALL_STATUSES
         and phone_call_id in call_messages
     ):
         call_messages[phone_call_id].end_call()
@@ -167,7 +161,7 @@ async def call_stream(
     event_payload = latest_phone_call_event(phone_call)
     if (
         event_payload is not None
-        and event_payload["CallStatus"] != PhoneCallStatus.queued
+        and event_payload["CallStatus"] in TERMINAL_PHONE_CALL_STATUSES
     ):
         raise HTTPException(status_code=400, detail="Phone call not queued")
 

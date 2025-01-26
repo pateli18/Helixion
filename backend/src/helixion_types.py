@@ -208,6 +208,14 @@ class PhoneCallStatus(str, Enum):
     no_answer = "no-answer"
 
 
+TERMINAL_PHONE_CALL_STATUSES = [
+    PhoneCallStatus.completed,
+    PhoneCallStatus.busy,
+    PhoneCallStatus.failed,
+    PhoneCallStatus.no_answer,
+]
+
+
 class DocumentMetadata(BaseModel):
     id: SerializedUUID
     name: str
