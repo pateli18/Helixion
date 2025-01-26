@@ -249,3 +249,9 @@ def calculate_bar_heights(
         BarHeight(height=height, speaker=speaker)
         for height, speaker in zip(normalized_heights, bar_speakers)
     ]
+
+
+def audio_bytes_to_ms(
+    audio_bytes: bytes, bytes_per_sample: int, sample_rate: int
+) -> int:
+    return int((len(audio_bytes) / bytes_per_sample) * 1000 / sample_rate)

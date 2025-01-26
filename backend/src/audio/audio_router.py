@@ -12,6 +12,7 @@ from twilio.rest import Client
 
 from src.ai.caller import AiCaller
 from src.ai.document_query import query_documents
+from src.audio.sounds import get_sound_base64
 from src.db.api import insert_phone_call_event
 from src.db.base import async_session_scope
 from src.helixion_types import PhoneCallEndReason, PhoneCallStatus
@@ -61,6 +62,16 @@ class CallRouter:
             async for message in self.ai_caller:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
+                        hang_up_sound = get_sound_base64("hang_up_sound_8k")
+                        if hang_up_sound is not None:
+                            await websocket.send_json(
+                                {
+                                    "event": "media",
+                                    "payload": hang_up_sound[0],
+                                }
+                            )
+                            self.mark_queue.append(hang_up_sound[1])
+
                         arguments = json.loads(message["arguments"])
                         if arguments["reason"] == "answering_machine":
                             self._hang_up_reason = (
@@ -233,6 +244,17 @@ class BrowserRouter:
             async for message in self.ai_caller:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
+                        hang_up_sound = get_sound_base64("hang_up_sound_24k")
+                        if hang_up_sound is not None:
+                            await websocket.send_json(
+                                {
+                                    "event": "media",
+                                    "payload": hang_up_sound[0],
+                                }
+                            )
+                            self.mark_queue.append(hang_up_sound[1])
+                        else:
+                            logger.warning("Hang up sound not found")
                         arguments = json.loads(message["arguments"])
                         if arguments["reason"] == "answering_machine":
                             self._hang_up_reason = (
@@ -246,6 +268,7 @@ class BrowserRouter:
                                 PhoneCallEndReason.end_of_call_bot
                             )
                             logger.info("Hang up requested by bot")
+
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]

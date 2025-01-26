@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from src.audio.sounds import initialize_sounds_cache
 from src.db.base import db_setup, shutdown_session
 from src.routes import agent, browser, phone, user
 from src.settings import settings, setup_logging
@@ -22,6 +23,7 @@ if settings.sentry_dsn is not None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db_setup()
+    await initialize_sounds_cache()
     yield
     await shutdown_session()
 

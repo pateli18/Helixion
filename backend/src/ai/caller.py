@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from pydantic.json import pydantic_encoder
 
 from src.ai.prompts import hang_up_tool, query_documents_tool
+from src.audio.data_processing import audio_bytes_to_ms
 from src.aws_utils import S3Client
 from src.db.api import update_phone_call
 from src.db.base import async_session_scope
@@ -314,10 +315,8 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
     def _audio_ms(self, audio_b64: str) -> int:
         audio_bytes = base64.b64decode(audio_b64)
-        return int(
-            (len(audio_bytes) / self._bytes_per_sample)
-            * 1000
-            / self._sampling_rate
+        return audio_bytes_to_ms(
+            audio_bytes, self._bytes_per_sample, self._sampling_rate
         )
 
     async def receive_human_audio(self, audio: str):
