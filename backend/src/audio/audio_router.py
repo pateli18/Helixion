@@ -330,7 +330,16 @@ class BrowserRouter:
         finally:
             await self._cleanup()
             if websocket.client_state == WebSocketState.CONNECTED:
-                await websocket.close()
+                try:
+                    await websocket.close()
+                except RuntimeError as e:
+                    if (
+                        "Cannot call 'send' once a close message has been sent"
+                        in str(e)
+                    ):
+                        logger.info("Connection already closed")
+                    else:
+                        logger.exception("Error closing websocket")
             logger.info("Closed connection to human")
 
     async def _truncate_audio_message(self) -> None:
