@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { ColumnDef } from "@tanstack/react-table";
 import { forwardRef, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { PhoneCallMetadata, PhoneCallStatus } from "@/types";
+import { PhoneCallMetadata, PhoneCallStatus, PhoneCallType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { getCallHistory } from "@/utils/apiCalls";
 import { LoadingView } from "@/components/Loader";
@@ -73,6 +73,22 @@ const StatusBadge = (props: { status: PhoneCallStatus }) => {
     <Badge className={cn(badgeColor, "text-white cursor-default")}>
       {props.status}
     </Badge>
+  );
+};
+
+const CallTypeBadge = (props: { callType: PhoneCallType }) => {
+  let badgeColor;
+  switch (props.callType) {
+    case "inbound":
+      badgeColor = "bg-blue-500 hover:bg-blue-500";
+      break;
+    case "outbound":
+      badgeColor = "bg-purple-500 hover:bg-purple-500";
+      break;
+  }
+
+  return (
+    <Badge className={cn("text-white cursor-default")}>{props.callType}</Badge>
   );
 };
 
@@ -161,19 +177,34 @@ export const CallHistoryPage = () => {
       },
     },
     {
-      accessorKey: "to_phone_number",
-      header: "To",
-      cell: ({ row }: any) => (
-        <Tooltip>
-          <TooltipTrigger>
-            <ClickToCopy
-              text={row.original.to_phone_number}
-              className="lowercase max-w-[100px] text-ellipsis overflow-hidden whitespace-nowrap"
-            />
-          </TooltipTrigger>
-          <TooltipContent>{row.original.to_phone_number}</TooltipContent>
-        </Tooltip>
-      ),
+      accessorKey: "phone_number",
+      header: "Phone Number",
+      cell: ({ row }: any) => {
+        const callType = row.original.call_type;
+        const relevantPhoneNumber =
+          callType === "inbound"
+            ? row.original.from_phone_number
+            : row.original.to_phone_number;
+        return (
+          <Tooltip>
+            <TooltipTrigger>
+              <ClickToCopy
+                text={relevantPhoneNumber}
+                className="lowercase max-w-[100px] text-ellipsis overflow-hidden whitespace-nowrap"
+              />
+            </TooltipTrigger>
+            <TooltipContent>{relevantPhoneNumber}</TooltipContent>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      accessorKey: "call_type",
+      header: "Call Type",
+      cell: ({ row }: any) => {
+        const callType = row.original.call_type;
+        return <CallTypeBadge callType={callType} />;
+      },
     },
     {
       accessorKey: "input-data",
@@ -181,6 +212,9 @@ export const CallHistoryPage = () => {
       cell: ({ row }: any) => {
         // get first key / value pair
         const inputData: Record<string, string> = row.original.input_data;
+        if (Object.keys(inputData).length === 0) {
+          return null;
+        }
         const firstKey = Object.keys(inputData)[0];
         const firstValue = inputData[firstKey];
         return (

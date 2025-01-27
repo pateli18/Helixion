@@ -18,8 +18,9 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
+from twilio.twiml.voice_response import Connect, VoiceResponse
 
-from src.ai.caller import AiCaller, AiMessageQueue
+from src.ai.caller import AiCaller, AiMessage, AiMessageQueue
 from src.audio.audio_router import (
     CallRouter,
     hang_up_phone_call,
@@ -27,9 +28,11 @@ from src.audio.audio_router import (
     twilio_request_validator,
 )
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
+from src.audio.sounds import get_sound_base64
 from src.auth import auth
 from src.aws_utils import S3Client
 from src.db.api import (
+    get_agent_by_incoming_phone_number,
     get_agent_documents,
     get_phone_call,
     get_phone_calls,
@@ -45,6 +48,8 @@ from src.helixion_types import (
     BarHeight,
     Document,
     PhoneCallMetadata,
+    PhoneCallStatus,
+    PhoneCallType,
     SerializedUUID,
     SpeakerSegment,
 )
@@ -99,12 +104,66 @@ async def status_webhook(
 
     # end live streams with terminal states
     if (
-        payload["CallStatus"] in TERMINAL_PHONE_CALL_STATUSES
+        payload.get("CallStatus") in TERMINAL_PHONE_CALL_STATUSES
         and phone_call_id in call_messages
     ):
         call_messages[phone_call_id].end_call()
 
     return Response(status_code=204)
+
+
+@router.post("/inbound-call")
+async def inbound_call(
+    payload: dict = Depends(_validate_twilio_request),
+    db: async_scoped_session = Depends(get_session),
+):
+    to_number = payload["To"]
+    agent = await get_agent_by_incoming_phone_number(to_number, db)
+    voice_response = VoiceResponse()
+    if agent is None:
+        voice_response.say(
+            "We're sorry, but this number only makes outbound calls. Goodbye!"
+        )
+        voice_response.hangup()
+    else:
+        phone_call_id = uuid4()
+        await insert_phone_call(
+            phone_call_id,
+            payload["CallSid"],
+            {},
+            payload["From"],
+            to_number,
+            cast(SerializedUUID, agent.id),
+            PhoneCallType.inbound,
+            db,
+        )
+        await insert_phone_call_event(
+            phone_call_id,
+            {
+                "CallDuration": 0,
+                "CallStatus": PhoneCallStatus.queued,
+                "SequenceNumber": 0,
+            },
+            db,
+        )
+        await db.commit()
+
+        # initialize queues for this call
+        call_messages[phone_call_id] = AiMessageQueue()
+
+        connect = Connect()
+        connect.stream(
+            url=f"wss://{settings.host}/api/v1/phone/call-stream/{phone_call_id}",
+            status_callback=f"https://{settings.host}/api/v1/phone/webhook/status/{phone_call_id}",
+            status_callback_event=[
+                "initiated",
+                "ringing",
+                "answered",
+                "completed",
+            ],
+        )
+        voice_response.append(connect)
+    return Response(content=str(voice_response), media_type="application/xml")
 
 
 @router.post(
@@ -121,7 +180,7 @@ async def outbound_call(
     call = twilio_client.calls.create(
         to=request.phone_number,
         from_=from_phone_number,
-        twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/outbound-call-stream/{phone_call_id}" /></Connect></Response>',
+        twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/call-stream/{phone_call_id}" /></Connect></Response>',
         status_callback=f"https://{settings.host}/api/v1/phone/webhook/status/{phone_call_id}",
         status_callback_event=[
             "initiated",
@@ -138,6 +197,7 @@ async def outbound_call(
         from_phone_number,
         request.phone_number,
         request.agent_id,
+        PhoneCallType.outbound,
         db,
     )
     await db.commit()
@@ -148,7 +208,7 @@ async def outbound_call(
     return OutboundCallResponse(phone_call_id=phone_call_id)
 
 
-@router.websocket("/outbound-call-stream/{phone_call_id}")
+@router.websocket("/call-stream/{phone_call_id}")
 async def call_stream(
     phone_call_id: SerializedUUID,
     websocket: WebSocket,
@@ -180,7 +240,11 @@ async def call_stream(
         documents=documents,
     ) as ai:
         ai.attach_queue(call_messages[phone_call_id])
-        call_router = CallRouter(cast(str, phone_call.call_sid), ai)
+        call_router = CallRouter(
+            cast(str, phone_call.call_sid),
+            ai,
+            cast(PhoneCallType, phone_call.call_type),
+        )
         await asyncio.gather(
             call_router.receive_from_human_call(websocket),
             call_router.send_to_human(websocket),
@@ -206,8 +270,17 @@ async def listen_in(
         queue = call_messages[phone_call_id].queue
         while True:
             message = await queue.get()
+            call_ended = message.type == AiMessageEventTypes.call_end
+            if call_ended:
+                hang_up_sound = get_sound_base64("hang_up_sound_8k")
+                if hang_up_sound is not None:
+                    yield AiMessage(
+                        type=AiMessageEventTypes.audio,
+                        data=hang_up_sound[0],
+                        metadata={},
+                    ).serialized
             yield message.serialized
-            if message.type == AiMessageEventTypes.call_end:
+            if call_ended:
                 break
 
     return StreamingResponse(

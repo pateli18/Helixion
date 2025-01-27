@@ -13,6 +13,8 @@ export type AgentMetadata = {
   version_id: string;
 };
 
+export type PhoneCallType = "inbound" | "outbound";
+
 export type PhoneCallMetadata = {
   id: string;
   from_phone_number: string;
@@ -23,6 +25,7 @@ export type PhoneCallMetadata = {
   duration?: number;
   recording_available: boolean;
   agent_metadata: AgentMetadata;
+  call_type: PhoneCallType;
 };
 
 export type SpeakerSegment = {
@@ -46,6 +49,7 @@ export type Agent = {
   created_at: string;
   document_metadata: DocumentMetadata[];
   sample_values: Record<string, string>;
+  incoming_phone_number: string | null;
 };
 
 export type DocumentMetadata = {

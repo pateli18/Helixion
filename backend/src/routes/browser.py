@@ -21,6 +21,7 @@ from src.helixion_types import (
     BROWSER_NAME,
     Document,
     PhoneCallStatus,
+    PhoneCallType,
     SerializedUUID,
 )
 
@@ -61,6 +62,7 @@ async def outbound_call(
         from_phone_number,
         BROWSER_NAME,
         request.agent_id,
+        PhoneCallType.outbound,
         db,
     )
     await insert_phone_call_event(

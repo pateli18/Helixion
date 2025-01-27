@@ -38,6 +38,7 @@ class PhoneCallModel(Base, TimestampMixin):
     from_phone_number = Column(VARCHAR, nullable=False)
     to_phone_number = Column(VARCHAR, nullable=False)
     end_reason = Column(VARCHAR, nullable=True)
+    call_type = Column(VARCHAR, nullable=False)
 
     events = relationship("PhoneCallEventModel", back_populates="phone_call")
     agent = relationship("AgentModel", back_populates="phone_calls")

@@ -7,6 +7,7 @@ from src.helixion_types import (
     DocumentMetadata,
     PhoneCallMetadata,
     PhoneCallStatus,
+    PhoneCallType,
     SerializedUUID,
 )
 
@@ -14,8 +15,16 @@ from src.helixion_types import (
 def latest_phone_call_event(phone_call: PhoneCallModel) -> Optional[dict]:
     if len(phone_call.events) == 0:
         return None
+    # filter out media stream events
+    relevant_events = [
+        event
+        for event in phone_call.events
+        if event.payload.get("CallStatus") is not None
+    ]
+    if len(relevant_events) == 0:
+        return None
     return sorted(
-        phone_call.events,
+        relevant_events,
         key=lambda event: int(event.payload["SequenceNumber"]),
     )[-1].payload
 
@@ -43,6 +52,7 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
             name=phone_call.agent.name,
             version_id=phone_call.agent.id,
         ),
+        call_type=cast(PhoneCallType, phone_call.call_type),
     )
 
 
@@ -62,4 +72,5 @@ def convert_agent_model(agent: AgentModel) -> Agent:
             for document in agent.documents
         ],
         sample_values=cast(Optional[dict], agent.sample_values) or {},
+        incoming_phone_number=cast(Optional[str], agent.incoming_phone_number),
     )

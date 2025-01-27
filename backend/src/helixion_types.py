@@ -227,6 +227,11 @@ class AgentMetadata(BaseModel):
     version_id: SerializedUUID
 
 
+class PhoneCallType(str, Enum):
+    inbound = "inbound"
+    outbound = "outbound"
+
+
 class PhoneCallMetadata(BaseModel):
     id: SerializedUUID
     from_phone_number: str
@@ -237,6 +242,7 @@ class PhoneCallMetadata(BaseModel):
     duration: Optional[int] = None
     recording_available: bool
     agent_metadata: AgentMetadata
+    call_type: PhoneCallType
 
 
 class Speaker(str, Enum):
@@ -262,6 +268,7 @@ class AgentBase(BaseModel):
     base_id: SerializedUUID
     active: bool
     sample_values: dict
+    incoming_phone_number: Optional[str]
 
 
 class Agent(AgentBase):

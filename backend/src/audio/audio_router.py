@@ -15,7 +15,11 @@ from src.ai.document_query import query_documents
 from src.audio.sounds import get_sound_base64
 from src.db.api import insert_phone_call_event
 from src.db.base import async_session_scope
-from src.helixion_types import PhoneCallEndReason, PhoneCallStatus
+from src.helixion_types import (
+    PhoneCallEndReason,
+    PhoneCallStatus,
+    PhoneCallType,
+)
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -39,8 +43,14 @@ class CallRouter:
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
     hang_up_reason: Optional[PhoneCallEndReason]
+    call_type: PhoneCallType
 
-    def __init__(self, call_sid: str, ai_caller: AiCaller):
+    def __init__(
+        self,
+        call_sid: str,
+        ai_caller: AiCaller,
+        call_type: PhoneCallType,
+    ):
         self.call_sid = call_sid
         self.stream_sid = None
         self.last_ai_item_id = None
@@ -49,29 +59,33 @@ class CallRouter:
         self.inter_mark_elapsed_time = 0
         self.ai_caller = ai_caller
         self._hang_up_reason = None
+        self.call_type = call_type
 
     async def _cleanup(self) -> None:
-        await self.ai_caller.close(
+        phone_call_id, duration = await self.ai_caller.close(
             self._hang_up_reason or PhoneCallEndReason.unknown
         )
         hang_up_phone_call(self.call_sid)
         logger.info("Cleanup complete")
+
+        # twilio doesn't provide status callbacks for inbound calls
+        if self.call_type == PhoneCallType.inbound:
+            async with async_session_scope() as db:
+                await insert_phone_call_event(
+                    phone_call_id,
+                    {
+                        "CallDuration": duration // 1000,
+                        "CallStatus": PhoneCallStatus.completed,
+                        "SequenceNumber": 1,
+                    },
+                    db,
+                )
 
     async def send_to_human(self, websocket: WebSocket):
         try:
             async for message in self.ai_caller:
                 if message["type"] == "response.function_call_arguments.done":
                     if message["name"] == "hang_up":
-                        hang_up_sound = get_sound_base64("hang_up_sound_8k")
-                        if hang_up_sound is not None:
-                            await websocket.send_json(
-                                {
-                                    "event": "media",
-                                    "payload": hang_up_sound[0],
-                                }
-                            )
-                            self.mark_queue.append(hang_up_sound[1])
-
                         arguments = json.loads(message["arguments"])
                         if arguments["reason"] == "answering_machine":
                             self._hang_up_reason = (

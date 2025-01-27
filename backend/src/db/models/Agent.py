@@ -19,6 +19,7 @@ class AgentModel(Base, TimestampMixin):
     base_id = Column(UUID(as_uuid=True), nullable=False)
     active = Column(Boolean, nullable=False)
     sample_values = Column(JSONB, nullable=True)
+    incoming_phone_number = Column(VARCHAR, nullable=True)
 
     phone_calls = relationship("PhoneCallModel", back_populates="agent")
     documents = relationship(

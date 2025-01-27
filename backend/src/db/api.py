@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import Select, insert, select, update
 from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -13,7 +13,12 @@ from src.db.models import (
     PhoneCallModel,
     UserModel,
 )
-from src.helixion_types import AgentBase, PhoneCallEndReason, SerializedUUID
+from src.helixion_types import (
+    AgentBase,
+    PhoneCallEndReason,
+    PhoneCallType,
+    SerializedUUID,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +30,7 @@ async def insert_phone_call(
     from_phone_number: str,
     to_phone_number: str,
     agent_id: SerializedUUID,
+    call_type: PhoneCallType,
     db: async_scoped_session,
 ) -> None:
     await db.execute(
@@ -35,6 +41,7 @@ async def insert_phone_call(
             from_phone_number=from_phone_number,
             to_phone_number=to_phone_number,
             agent_id=agent_id,
+            call_type=call_type.value,
         )
     )
 
@@ -110,20 +117,32 @@ async def insert_agent(
     return result.scalar_one()
 
 
+def _base_agent_query() -> Select:
+    return select(AgentModel).options(
+        selectinload(AgentModel.documents)
+        .joinedload(AgentDocumentModel.document)
+        .load_only(
+            DocumentModel.id,  # type: ignore
+            DocumentModel.name,  # type: ignore
+        )
+    )
+
+
 async def get_agent(
     agent_id: SerializedUUID, db: async_scoped_session
 ) -> Optional[AgentModel]:
+    query = _base_agent_query()
+    result = await db.execute(query.where(AgentModel.id == agent_id))
+    return result.scalar_one_or_none()
+
+
+async def get_agent_by_incoming_phone_number(
+    incoming_phone_number: str,
+    db: async_scoped_session,
+) -> Optional[AgentModel]:
+    query = _base_agent_query()
     result = await db.execute(
-        select(AgentModel)
-        .options(
-            selectinload(AgentModel.documents)
-            .joinedload(AgentDocumentModel.document)
-            .load_only(
-                DocumentModel.id,  # type: ignore
-                DocumentModel.name,  # type: ignore
-            )
-        )
-        .where(AgentModel.id == agent_id)
+        query.where(AgentModel.incoming_phone_number == incoming_phone_number)
     )
     return result.scalar_one_or_none()
 

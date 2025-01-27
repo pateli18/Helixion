@@ -85,6 +85,7 @@ async def create_agent(
             base_id=base_id,
             active=True,
             sample_values={},
+            incoming_phone_number=None,
         ),
         db,
     )
