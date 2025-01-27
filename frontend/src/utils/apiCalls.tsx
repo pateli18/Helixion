@@ -171,6 +171,7 @@ export const createNewAgentVersion = async (
           base_id: agent.base_id,
           active: agent.active,
           sample_values: agent.sample_values,
+          incoming_phone_number: agent.incoming_phone_number,
         },
         new_fields: newFields,
       },
