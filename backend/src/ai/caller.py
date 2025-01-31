@@ -7,6 +7,7 @@ import os
 import time
 from contextlib import AsyncExitStack
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import (
     AsyncContextManager,
@@ -23,7 +24,11 @@ import websockets
 from pydantic import BaseModel, Field
 from pydantic.json import pydantic_encoder
 
-from src.ai.prompts import hang_up_tool, query_documents_tool
+from src.ai.prompts import (
+    enter_keypad_tool,
+    hang_up_tool,
+    query_documents_tool,
+)
 from src.audio.data_processing import audio_bytes_to_ms
 from src.aws_utils import S3Client
 from src.db.api import update_phone_call
@@ -51,6 +56,12 @@ class TurnDetection(BaseModel):
     silence_duration_ms: int = 500
 
 
+class ToolNames(str, Enum):
+    hang_up = "hang_up"
+    query_documents = "query_documents"
+    enter_keypad = "enter_keypad"
+
+
 class AiSessionConfiguration(BaseModel):
     turn_detection: Optional[TurnDetection]
     input_audio_format: Optional[AudioFormat]
@@ -66,16 +77,17 @@ class AiSessionConfiguration(BaseModel):
         system_prompt: str,
         user_info: dict,
         audio_format: AudioFormat,
-        include_hang_up_tool: bool,
-        include_query_documents_tool: bool,
+        tool_names: list[ToolNames],
     ) -> "AiSessionConfiguration":
         system_message = system_prompt.format(**user_info)
 
         tools = []
-        if include_hang_up_tool:
+        if ToolNames.hang_up in tool_names:
             tools.append(hang_up_tool)
-        if include_query_documents_tool:
+        if ToolNames.query_documents in tool_names:
             tools.append(query_documents_tool)
+        if ToolNames.enter_keypad in tool_names:
+            tools.append(enter_keypad_tool)
 
         return cls(
             turn_detection=TurnDetection(),
@@ -168,6 +180,9 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         audio_format: AudioFormat = "g711_ulaw",
         start_speaking_buffer_ms: Optional[int] = None,
         documents: Optional[list[Document]] = None,
+        tool_names: list[ToolNames] = [
+            ToolNames.hang_up,
+        ],
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
@@ -176,12 +191,13 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
         self.documents = documents or []
 
+        if len(self.documents) > 0:
+            tool_names.append(ToolNames.query_documents)
         self.session_configuration = AiSessionConfiguration.default(
             system_prompt,
             user_info,
             self._audio_format,
-            True,
-            len(self.documents) > 0,
+            tool_names,
         )
         self._sampling_rate = 24000 if self._audio_format == "pcm16" else 8000
         self._bytes_per_sample = 2 if self._audio_format == "pcm16" else 1
