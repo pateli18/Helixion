@@ -1,11 +1,12 @@
 import { BarHeight, SpeakerSegment } from "@/types";
 import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Download, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { formatTime } from "@/utils/dateFormat";
 import { calculatedBars, colorMap } from "./visualizationUtils";
 
 export const AudioPlayer = (props: {
+  callId: string;
   audioUrl: string;
   audioRef: MutableRefObject<HTMLAudioElement | null>;
   speakerSegments: SpeakerSegment[];
@@ -158,6 +159,21 @@ export const AudioPlayer = (props: {
 
           <Button variant="default" size="icon" onClick={handleSkipForward}>
             <SkipForward className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="default"
+            size="icon"
+            onClick={() => {
+              const link = document.createElement("a");
+              link.href = props.audioUrl;
+              link.download = `call-${props.callId}.wav`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            <Download className="h-4 w-4" />
           </Button>
         </div>
       </div>

@@ -142,6 +142,7 @@ export const CallDisplay = (props: {
         <div>
           {audioPlayback.speaker_segments.length > 0 && props.call && (
             <AudioPlayer
+              callId={props.call.id}
               audioUrl={audioPlayback.audio_url}
               audioRef={audioRef}
               setCurrentSegment={setCurrentSegment}
