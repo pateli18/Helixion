@@ -23,6 +23,8 @@ import {
   DialogContent,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import ReactDiffViewer from "react-diff-viewer-continued";
 
 const extractFieldsFromSystemMessage = (value: string) => {
   // Extract all fields surrounded by {}
@@ -100,10 +102,34 @@ interface AgentConfigurationProps {
   activeAgent?: Agent;
 }
 
+const findPreviousVersion = (
+  agents: Agent[],
+  currentVersion: Agent
+): Agent | null => {
+  const sameBaseAgents = agents
+    .filter((a) => a.base_id === currentVersion.base_id)
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+  const currentIndex = sameBaseAgents.findIndex(
+    (a) => a.id === currentVersion.id
+  );
+  return currentIndex < sameBaseAgents.length - 1
+    ? sameBaseAgents[currentIndex + 1]
+    : null;
+};
+
 export const AgentConfiguration = (props: AgentConfigurationProps) => {
   const authInfo = useAuthInfo();
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
+  const [showDiff, setShowDiff] = useState(false);
+
+  const previousVersion = props.activeAgent
+    ? findPreviousVersion(props.agents, props.activeAgent)
+    : null;
 
   const handleSaveVersion = async () => {
     if (newVersion) {
@@ -245,27 +271,60 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
           disabled={props.activeAgent === undefined}
         />
       </div>
-      <div className="font-bold text-sm">Instructions</div>
-      <HighlightedTextarea
-        value={
-          (newVersion?.system_message ?? props.activeAgent?.system_message) ||
-          ""
-        }
-        onChange={(value) => {
-          setNewVersion((prev) => {
-            if (prev) {
+      <div className="flex items-center gap-2">
+        <div className="font-bold text-sm">Instructions</div>
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-sm text-muted-foreground">Show diff</span>
+          <Switch
+            checked={showDiff}
+            onCheckedChange={setShowDiff}
+            disabled={!previousVersion || !props.activeAgent}
+          />
+        </div>
+      </div>
+
+      {showDiff && previousVersion && props.activeAgent ? (
+        <div className="border rounded-md">
+          <ReactDiffViewer
+            oldValue={previousVersion.system_message}
+            newValue={
+              (newVersion?.system_message ??
+                props.activeAgent.system_message) ||
+              ""
+            }
+            splitView={false}
+            hideLineNumbers
+            styles={{
+              diffContainer: {
+                fontSize: "12px",
+                fontFamily: "JetBrains Mono, monospace",
+              },
+            }}
+          />
+        </div>
+      ) : (
+        <HighlightedTextarea
+          value={
+            (newVersion?.system_message ?? props.activeAgent?.system_message) ||
+            ""
+          }
+          onChange={(value) => {
+            setNewVersion((prev) => {
+              if (prev) {
+                return {
+                  ...prev,
+                  system_message: value,
+                };
+              }
               return {
-                ...prev,
+                ...props.activeAgent!,
                 system_message: value,
               };
-            }
-            return {
-              ...props.activeAgent!,
-              system_message: value,
-            };
-          });
-        }}
-      />
+            });
+          }}
+        />
+      )}
+
       <div className="flex flex-wrap gap-2">
         {props.activeAgent?.document_metadata.map((document) => (
           <Badge variant="secondary" key={document.id}>
