@@ -129,13 +129,17 @@ async def insert_agent(
 
 
 def _base_agent_query() -> Select:
-    return select(AgentModel).options(
-        selectinload(AgentModel.documents)
-        .joinedload(AgentDocumentModel.document)
-        .load_only(
-            DocumentModel.id,  # type: ignore
-            DocumentModel.name,  # type: ignore
+    return (
+        select(AgentModel)
+        .options(
+            selectinload(AgentModel.documents)
+            .joinedload(AgentDocumentModel.document)
+            .load_only(
+                DocumentModel.id,  # type: ignore
+                DocumentModel.name,  # type: ignore
+            )
         )
+        .options(selectinload(AgentModel.user))
     )
 
 
