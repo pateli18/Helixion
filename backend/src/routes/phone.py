@@ -29,9 +29,10 @@ from src.audio.audio_router import (
 )
 from src.audio.data_processing import calculate_bar_heights, process_audio_data
 from src.audio.sounds import get_sound_base64
-from src.auth import auth
+from src.auth import User, require_user
 from src.aws_utils import S3Client
 from src.db.api import (
+    check_organization_owns_agent,
     get_agent_by_incoming_phone_number,
     get_agent_documents,
     get_phone_call,
@@ -169,12 +170,17 @@ async def inbound_call(
 @router.post(
     "/outbound-call",
     response_model=OutboundCallResponse,
-    dependencies=[Depends(auth.require_user)],
 )
 async def outbound_call(
     request: OutboundCallRequest,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
-):
+) -> OutboundCallResponse:
+    if not await check_organization_owns_agent(
+        request.agent_id, cast(str, user.active_org_id), db
+    ):
+        raise HTTPException(status_code=403, detail="Agent not found")
+
     phone_call_id = uuid4()
     from_phone_number = "+13305787677"
     call = twilio_client.calls.create(
@@ -253,15 +259,19 @@ async def call_stream(
 
 @router.get(
     "/listen-in-stream/{phone_call_id}",
-    dependencies=[Depends(auth.require_user)],
 )
 async def listen_in(
     phone_call_id: SerializedUUID,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ):
     phone_call = await get_phone_call(phone_call_id, db)
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
+    if not await check_organization_owns_agent(
+        phone_call.agent.id, cast(str, user.active_org_id), db
+    ):
+        raise HTTPException(status_code=403, detail="Phone call not found")
     logger.info(f"Listening in for phone call {phone_call_id}")
 
     async def listen_in_stream(
@@ -291,15 +301,19 @@ async def listen_in(
 @router.post(
     "/hang-up/{phone_call_id}",
     status_code=204,
-    dependencies=[Depends(auth.require_user)],
 )
 async def hang_up(
     phone_call_id: SerializedUUID,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ):
     phone_call = await get_phone_call(phone_call_id, db)
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
+    if not await check_organization_owns_agent(
+        phone_call.agent.id, cast(str, user.active_org_id), db
+    ):
+        raise HTTPException(status_code=403, detail="Phone call not found")
     if phone_call.call_data is not None:
         raise HTTPException(status_code=400, detail="Phone call already ended")
     hang_up_phone_call(cast(str, phone_call.call_sid))
@@ -311,12 +325,12 @@ async def hang_up(
 @router.get(
     "/call-history",
     response_model=list[PhoneCallMetadata],
-    dependencies=[Depends(auth.require_user)],
 )
 async def get_call_history(
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ) -> list[PhoneCallMetadata]:
-    phone_calls = await get_phone_calls(db)
+    phone_calls = await get_phone_calls(cast(str, user.active_org_id), db)
     return [convert_phone_call_model(phone_call) for phone_call in phone_calls]
 
 
@@ -330,15 +344,19 @@ class AudioTranscriptResponse(BaseModel):
 @router.get(
     "/playback/{phone_call_id}",
     response_model=AudioTranscriptResponse,
-    dependencies=[Depends(auth.require_user)],
 )
 async def get_audio_playback(
     phone_call_id: SerializedUUID,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ):
     phone_call = await get_phone_call(phone_call_id, db)
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
+    if not await check_organization_owns_agent(
+        phone_call.agent.id, cast(str, user.active_org_id), db
+    ):
+        raise HTTPException(status_code=403, detail="Phone call not found")
     async with S3Client() as s3:
         audio_data_raw, _, _ = await s3.download_file(
             cast(str, phone_call.call_data)

@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import async_scoped_session
 from svix.webhooks import Webhook, WebhookVerificationError
 
-from src.db.api import insert_user
+from src.db.api import (
+    insert_organization,
+    insert_user,
+    update_user_organization,
+)
 from src.db.base import get_session
 from src.settings import settings
 
@@ -44,6 +48,18 @@ async def webhook(
         await insert_user(
             payload["user_id"],
             payload["email"],
+            db,
+        )
+    elif payload["event_type"] == "user.added_to_org":
+        await update_user_organization(
+            payload["user_id"],
+            payload["org_id"],
+            db,
+        )
+    elif payload["event_type"] == "org.created":
+        await insert_organization(
+            payload["org_id"],
+            payload["name"],
             db,
         )
     else:

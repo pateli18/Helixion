@@ -9,6 +9,7 @@ from src.db.models import (
     AgentDocumentModel,
     AgentModel,
     DocumentModel,
+    OrganizationModel,
     PhoneCallEventModel,
     PhoneCallModel,
     UserModel,
@@ -88,11 +89,15 @@ async def update_phone_call(
     )
 
 
-async def get_phone_calls(db: async_scoped_session) -> list[PhoneCallModel]:
+async def get_phone_calls(
+    organization_id: str, db: async_scoped_session
+) -> list[PhoneCallModel]:
     result = await db.execute(
         select(PhoneCallModel)
+        .join(AgentModel)
         .options(selectinload(PhoneCallModel.events))
         .options(joinedload(PhoneCallModel.agent))
+        .where(AgentModel.organization_id == organization_id)
         .order_by(PhoneCallModel.created_at.desc())
     )
     return list(result.scalars().all())
@@ -100,6 +105,8 @@ async def get_phone_calls(db: async_scoped_session) -> list[PhoneCallModel]:
 
 async def insert_agent(
     payload: AgentBase,
+    user_id: str,
+    organization_id: str,
     db: async_scoped_session,
 ) -> SerializedUUID:
     if payload.active is True:
@@ -109,10 +116,14 @@ async def insert_agent(
             .where(AgentModel.base_id == payload.base_id)
             .values(active=False)
         )
+    insert_values = {
+        **payload.model_dump(),
+        "user_id": user_id,
+        "organization_id": organization_id,
+    }
+
     result = await db.execute(
-        insert(AgentModel)
-        .returning(AgentModel.id)
-        .values(payload.model_dump())
+        insert(AgentModel).returning(AgentModel.id).values(insert_values)
     )
     return result.scalar_one()
 
@@ -147,7 +158,9 @@ async def get_agent_by_incoming_phone_number(
     return result.scalar_one_or_none()
 
 
-async def get_agents(db: async_scoped_session) -> list[AgentModel]:
+async def get_agents(
+    organization_id: str, db: async_scoped_session
+) -> list[AgentModel]:
     result = await db.execute(
         select(AgentModel)
         .options(
@@ -158,6 +171,7 @@ async def get_agents(db: async_scoped_session) -> list[AgentModel]:
                 DocumentModel.name,  # type: ignore
             )
         )
+        .where(AgentModel.organization_id == organization_id)
         .order_by(AgentModel.created_at.desc())
     )
     return list(result.scalars().unique().all())
@@ -178,6 +192,28 @@ async def insert_user(
     )
 
 
+async def update_user_organization(
+    user_id: str,
+    organization_id: str,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        update(UserModel)
+        .where(UserModel.id == user_id)
+        .values(organization_id=organization_id)
+    )
+
+
+async def insert_organization(
+    organization_id: str,
+    name: str,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        insert(OrganizationModel).values(id=organization_id, name=name)
+    )
+
+
 async def get_agent_documents(
     base_agent_id: SerializedUUID, db: async_scoped_session
 ) -> list[DocumentModel]:
@@ -188,3 +224,16 @@ async def get_agent_documents(
         .where(DocumentModel.id == AgentDocumentModel.document_id)
     )
     return list(result.scalars().all())
+
+
+async def check_organization_owns_agent(
+    agent_id: SerializedUUID,
+    organization_id: str,
+    db: async_scoped_session,
+) -> bool:
+    result = await db.execute(
+        select(AgentModel)
+        .where(AgentModel.id == agent_id)
+        .where(AgentModel.organization_id == organization_id)
+    )
+    return result.scalar_one_or_none() is not None

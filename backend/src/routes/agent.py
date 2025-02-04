@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 
 from src.ai.prompts import default_system_prompt
 from src.ai.sample_values import generate_sample_values
-from src.auth import auth
+from src.auth import User, require_user
 from src.db.api import get_agent, get_agents, insert_agent
 from src.db.base import get_session
 from src.db.converter import convert_agent_model
@@ -26,12 +27,13 @@ router = APIRouter(
 @router.get(
     "/all",
     response_model=list[Agent],
-    dependencies=[Depends(auth.require_user)],
+    dependencies=[Depends(require_user)],
 )
 async def retrieve_all_agents(
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ) -> list[Agent]:
-    agents = await get_agents(db)
+    agents = await get_agents(cast(str, user.active_org_id), db)
     return [convert_agent_model(agent) for agent in agents]
 
 
@@ -43,10 +45,10 @@ class NewAgentVersionRequest(BaseModel):
 @router.post(
     "/new-version",
     response_model=Agent,
-    dependencies=[Depends(auth.require_user)],
 )
 async def create_new_agent_version(
     request: NewAgentVersionRequest,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ) -> Agent:
     if len(request.new_fields) > 0:
@@ -57,7 +59,12 @@ async def create_new_agent_version(
             **new_field_sample_values,
             **request.agent_base.sample_values,
         }
-    new_agent_id = await insert_agent(request.agent_base, db)
+    new_agent_id = await insert_agent(
+        request.agent_base,
+        user.user_id,
+        cast(str, user.active_org_id),
+        db,
+    )
     new_agent_model = await get_agent(new_agent_id, db)
     response = convert_agent_model(new_agent_model)
     await db.commit()
@@ -71,10 +78,10 @@ class NewAgentRequest(BaseModel):
 @router.post(
     "/new-agent",
     response_model=Agent,
-    dependencies=[Depends(auth.require_user)],
 )
 async def create_agent(
     request: NewAgentRequest,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ) -> Agent:
     base_id = uuid4()
@@ -87,6 +94,8 @@ async def create_agent(
             sample_values={},
             incoming_phone_number=None,
         ),
+        user.user_id,
+        cast(str, user.active_org_id),
         db,
     )
     new_agent_model = await get_agent(agent_id, db)
@@ -102,7 +111,7 @@ class SampleValuesRequest(BaseModel):
 @router.post(
     "/sample-values",
     response_model=dict,
-    dependencies=[Depends(auth.require_user)],
+    dependencies=[Depends(require_user)],
 )
 async def get_sample_values(
     request: SampleValuesRequest,

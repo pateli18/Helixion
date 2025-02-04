@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket
@@ -8,8 +9,9 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 
 from src.ai.caller import AiCaller
 from src.audio.audio_router import BrowserRouter
-from src.auth import auth
+from src.auth import User, require_user
 from src.db.api import (
+    check_organization_owns_agent,
     get_agent_documents,
     get_phone_call,
     insert_phone_call,
@@ -43,15 +45,16 @@ class CallResponse(BaseModel):
     phone_call_id: SerializedUUID
 
 
-@router.post(
-    "/call",
-    response_model=CallResponse,
-    dependencies=[Depends(auth.require_user)],
-)
+@router.post("/call", response_model=CallResponse)
 async def outbound_call(
     request: CallRequest,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ):
+    if not await check_organization_owns_agent(
+        request.agent_id, cast(str, user.active_org_id), db
+    ):
+        raise HTTPException(status_code=403, detail="Agent not found")
     phone_call_id = uuid4()
     from_phone_number = BROWSER_NAME
 
