@@ -18,7 +18,9 @@ export const ServicesProviderWrapper = ({ children }: PropsWithChildren) => {
         tracesSampleRate: 0.1, //  Capture 100% of the transactions
         // Set 'tracePropagationTargets' to control for which URLs distributed tracing should be enabled
         tracePropagationTargets: ["api.helixion.ai"],
-        replaysSessionSampleRate: authInfo.user?.email.endsWith("@gmail.com")
+        replaysSessionSampleRate: authInfo.user?.email.endsWith(
+          "ihsaan@helixion.ai"
+        )
           ? 0.0
           : 1.0,
       });
