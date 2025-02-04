@@ -4,6 +4,7 @@ import base64
 import io
 import logging
 import wave
+import zipfile
 from typing import AsyncGenerator, cast
 from uuid import uuid4
 
@@ -357,18 +358,26 @@ async def get_audio_playback(
         phone_call.agent.id, cast(str, user.active_org_id), db
     ):
         raise HTTPException(status_code=403, detail="Phone call not found")
-    async with S3Client() as s3:
-        audio_data_raw, _, _ = await s3.download_file(
-            cast(str, phone_call.call_data)
-        )
+    async with S3Client() as s3_client:
+        file_path = cast(str, phone_call.call_data)
+        file_data, mime_type, _ = await s3_client.download_file(file_path)
+
+        if mime_type == "application/zip":
+            # Handle zipped file
+            with zipfile.ZipFile(io.BytesIO(file_data)) as zip_file:
+                # Get first file in zip (should be the log file)
+                log_filename = zip_file.namelist()[0]
+                with zip_file.open(log_filename) as log_file:
+                    log_data = log_file.read()
+        else:
+            # Handle unzipped file
+            log_data = file_data
     (sample_rate) = (
         8000
         if cast(str, phone_call.from_phone_number) != BROWSER_NAME
         else 24000
     )
-    speaker_segments, audio_data = process_audio_data(
-        audio_data_raw, sample_rate
-    )
+    speaker_segments, audio_data = process_audio_data(log_data, sample_rate)
     if sample_rate == 8000:
         audio_data = audioop.ulaw2lin(audio_data, 2)
     bar_heights = calculate_bar_heights(

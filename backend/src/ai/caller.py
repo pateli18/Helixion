@@ -1,10 +1,12 @@
 import asyncio
 import audioop
 import base64
+import io
 import json
 import logging
 import os
 import time
+import zipfile
 from contextlib import AsyncExitStack
 from datetime import datetime
 from enum import Enum
@@ -483,11 +485,27 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         if len(self._log_tasks) > 0:
             logger.info(f"Flushing {len(self._log_tasks)} log tasks")
             await asyncio.gather(*self._log_tasks, return_exceptions=True)
+
         async with S3Client() as s3_client:
-            async with aiofiles.open(self.log_file, mode="rb") as f:
-                data = await f.read()
-            s3_filepath = f"s3://clinicontact/{self.log_file}"
-            await s3_client.upload_file(data, s3_filepath, "text/plain")
+            # Create zip file in memory
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(
+                zip_buffer, "w", zipfile.ZIP_DEFLATED
+            ) as zip_file:
+                async with aiofiles.open(self.log_file, mode="rb") as f:
+                    data = await f.read()
+                    # Add log file to zip with just the filename
+                    zip_file.writestr(Path(self.log_file).name, data)
+
+            # Reset buffer position
+            zip_buffer.seek(0)
+            zip_data = zip_buffer.getvalue()
+
+            # Upload zipped file
+            s3_filepath = f"s3://clinicontact/logs/{self._phone_call_id}.zip"
+            await s3_client.upload_file(
+                zip_data, s3_filepath, "application/zip"
+            )
 
         async with async_session_scope() as db:
             await update_phone_call(
