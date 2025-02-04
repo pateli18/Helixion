@@ -207,6 +207,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
                 .map((version) => (
                   <SelectItem key={version.id} value={version.id}>
                     <div className="flex space-x-2 items-center">
+                      <Badge variant="secondary">{version.user_email}</Badge>
                       <div className="text-sm text-muted-foreground">
                         {loadAndFormatDate(version.created_at)}
                       </div>

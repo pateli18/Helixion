@@ -31,6 +31,7 @@ class AgentModel(Base, TimestampMixin):
         back_populates="agents",
         primaryjoin="foreign(AgentDocumentModel.base_agent_id) == AgentModel.base_id",
     )
+    user = relationship("UserModel")
 
 
 class DocumentModel(Base, TimestampMixin):

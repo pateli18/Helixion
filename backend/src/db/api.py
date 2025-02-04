@@ -171,6 +171,7 @@ async def get_agents(
                 DocumentModel.name,  # type: ignore
             )
         )
+        .options(selectinload(AgentModel.user))
         .where(AgentModel.organization_id == organization_id)
         .order_by(AgentModel.created_at.desc())
     )

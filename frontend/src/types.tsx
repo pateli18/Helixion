@@ -50,6 +50,7 @@ export type Agent = {
   document_metadata: DocumentMetadata[];
   sample_values: Record<string, string>;
   incoming_phone_number: string | null;
+  user_email: string;
 };
 
 export type DocumentMetadata = {

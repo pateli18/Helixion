@@ -278,6 +278,7 @@ class Agent(AgentBase):
     created_at: SerializedDateTime
     document_metadata: list[DocumentMetadata]
     test_values: Optional[dict] = None
+    user_email: str
 
 
 class AiMessageEventTypes(str, Enum):
