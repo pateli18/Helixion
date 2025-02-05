@@ -334,10 +334,15 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         ))}
       </div>
       {newVersion && (
-        <Button onClick={handleSaveVersion}>
-          Save Version
-          {saveLoading && <ReloadIcon className="w-4 h-4 animate-spin" />}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleSaveVersion}>
+            Save Version
+            {saveLoading && <ReloadIcon className="w-4 h-4 animate-spin" />}
+          </Button>
+          <Button variant="destructive" onClick={() => setNewVersion(null)}>
+            Cancel Changes
+          </Button>
+        </div>
       )}
     </div>
   );
