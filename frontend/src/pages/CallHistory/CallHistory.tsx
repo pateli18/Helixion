@@ -80,15 +80,15 @@ const CallTypeBadge = (props: { callType: PhoneCallType }) => {
   let badgeColor;
   switch (props.callType) {
     case "inbound":
-      badgeColor = "bg-blue-500 hover:bg-blue-500";
+      badgeColor = "bg-blue-300 hover:bg-blue-300 text-black";
       break;
     case "outbound":
-      badgeColor = "bg-purple-500 hover:bg-purple-500";
+      badgeColor = "bg-blue-800 hover:bg-blue-800 text-white";
       break;
   }
 
   return (
-    <Badge className={cn("text-white cursor-default")}>{props.callType}</Badge>
+    <Badge className={cn(badgeColor, "cursor-default")}>{props.callType}</Badge>
   );
 };
 
@@ -204,6 +204,17 @@ export const CallHistoryPage = () => {
       cell: ({ row }: any) => {
         const callType = row.original.call_type;
         return <CallTypeBadge callType={callType} />;
+      },
+    },
+    {
+      accessorKey: "end_reason",
+      header: "End Reason",
+      cell: ({ row }: any) => {
+        return (
+          <Badge variant="secondary" className="cursor-default">
+            {row.original.end_reason}
+          </Badge>
+        );
       },
     },
     {

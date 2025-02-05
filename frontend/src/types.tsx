@@ -26,6 +26,7 @@ export type PhoneCallMetadata = {
   recording_available: boolean;
   agent_metadata: AgentMetadata;
   call_type: PhoneCallType;
+  end_reason: string | null;
 };
 
 export type SpeakerSegment = {

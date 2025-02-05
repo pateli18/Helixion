@@ -232,6 +232,14 @@ class PhoneCallType(str, Enum):
     outbound = "outbound"
 
 
+class PhoneCallEndReason(str, Enum):
+    end_of_call_bot = "end_of_call_bot"
+    voice_mail_bot = "voice_mail_bot"
+    user_hangup = "user_hangup"
+    unknown = "unknown"
+    listener_hangup = "listener_hangup"
+
+
 class PhoneCallMetadata(BaseModel):
     id: SerializedUUID
     from_phone_number: str
@@ -243,6 +251,7 @@ class PhoneCallMetadata(BaseModel):
     recording_available: bool
     agent_metadata: AgentMetadata
     call_type: PhoneCallType
+    end_reason: Optional[PhoneCallEndReason] = None
 
 
 class Speaker(str, Enum):
@@ -292,10 +301,3 @@ class Document(BaseModel):
     id: SerializedUUID
     name: str
     text: str
-
-
-class PhoneCallEndReason(str, Enum):
-    end_of_call_bot = "end_of_call_bot"
-    voice_mail_bot = "voice_mail_bot"
-    user_hangup = "user_hangup"
-    unknown = "unknown"

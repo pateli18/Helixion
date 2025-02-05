@@ -5,6 +5,7 @@ from src.helixion_types import (
     Agent,
     AgentMetadata,
     DocumentMetadata,
+    PhoneCallEndReason,
     PhoneCallMetadata,
     PhoneCallStatus,
     PhoneCallType,
@@ -53,6 +54,7 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
             version_id=phone_call.agent.id,
         ),
         call_type=cast(PhoneCallType, phone_call.call_type),
+        end_reason=cast(Optional[PhoneCallEndReason], phone_call.end_reason),
     )
 
 

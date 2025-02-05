@@ -75,17 +75,27 @@ async def insert_phone_call_event(
 
 async def update_phone_call(
     phone_call_id: SerializedUUID,
-    call_data: str,
+    call_data: Optional[str],
     phone_call_end_reason: PhoneCallEndReason,
     db: async_scoped_session,
 ) -> None:
+    payload = {}
+    if call_data is not None:
+        payload["call_data"] = call_data
+
+    # check if an end reason already exists
+    result = await db.execute(
+        select(PhoneCallModel)
+        .where(PhoneCallModel.id == phone_call_id)
+        .where(PhoneCallModel.end_reason.isnot(None))
+    )
+    if result.scalar_one_or_none() is None:
+        payload["end_reason"] = phone_call_end_reason.value
+
     await db.execute(
         update(PhoneCallModel)
         .where(PhoneCallModel.id == phone_call_id)
-        .values(
-            call_data=call_data,
-            end_reason=phone_call_end_reason.value,
-        )
+        .values(payload)
     )
 
 

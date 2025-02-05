@@ -40,6 +40,7 @@ from src.db.api import (
     get_phone_calls,
     insert_phone_call,
     insert_phone_call_event,
+    update_phone_call,
 )
 from src.db.base import get_session
 from src.db.converter import convert_phone_call_model, latest_phone_call_event
@@ -49,6 +50,7 @@ from src.helixion_types import (
     AiMessageEventTypes,
     BarHeight,
     Document,
+    PhoneCallEndReason,
     PhoneCallMetadata,
     PhoneCallStatus,
     PhoneCallType,
@@ -317,7 +319,15 @@ async def hang_up(
         raise HTTPException(status_code=403, detail="Phone call not found")
     if phone_call.call_data is not None:
         raise HTTPException(status_code=400, detail="Phone call already ended")
-    hang_up_phone_call(cast(str, phone_call.call_sid))
+    phone_call_sid = cast(str, phone_call.call_sid)
+    await update_phone_call(
+        phone_call_id,
+        None,
+        PhoneCallEndReason.listener_hangup,
+        db,
+    )
+    await db.commit()
+    hang_up_phone_call(phone_call_sid)
     if phone_call_id in call_messages:
         call_messages[phone_call_id].end_call()
     return Response(status_code=204)
