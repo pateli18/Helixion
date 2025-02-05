@@ -80,7 +80,7 @@ export const HighlightedTextarea = (props: {
   };
 
   return (
-    <div className="relative w-full h-96 border rounded-md shadow-sm p-4">
+    <div className="relative w-full h-96 border rounded-md shadow-sm p-4 bg-white">
       {/* Overlay div for highlights */}
       <div
         ref={overlayRef}
@@ -95,7 +95,7 @@ export const HighlightedTextarea = (props: {
         value={props.value}
         onChange={handleTextChange}
         onScroll={handleScroll}
-        className="absolute top-0 left-0 w-full h-full p-2 text-black bg-white resize-none font-mongo text-[14px] leading-[1.4]"
+        className="absolute top-0 left-0 w-full h-full p-2 text-black bg-transparent resize-none font-mongo text-[14px] leading-[1.4]"
         style={{
           caretColor: "black",
         }}
