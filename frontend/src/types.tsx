@@ -5,7 +5,8 @@ export type PhoneCallStatus =
   | "completed"
   | "busy"
   | "failed"
-  | "no-answer";
+  | "no-answer"
+  | "initiated";
 
 export type AgentMetadata = {
   base_id: string;

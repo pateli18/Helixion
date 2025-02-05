@@ -206,6 +206,7 @@ class PhoneCallStatus(str, Enum):
     busy = "busy"
     failed = "failed"
     no_answer = "no-answer"
+    initiated = "initiated"
 
 
 TERMINAL_PHONE_CALL_STATUSES = [

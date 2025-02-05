@@ -46,6 +46,9 @@ const ClickToCopy = forwardRef<
 const StatusBadge = (props: { status: PhoneCallStatus }) => {
   let badgeColor;
   switch (props.status) {
+    case "initiated":
+      badgeColor = "bg-gray-500 hover:bg-gray-500";
+      break;
     case "queued":
       badgeColor = "bg-gray-500 hover:bg-gray-500";
       break;
