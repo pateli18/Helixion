@@ -55,6 +55,7 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
         ),
         call_type=cast(PhoneCallType, phone_call.call_type),
         end_reason=cast(Optional[PhoneCallEndReason], phone_call.end_reason),
+        initiator=cast(Optional[str], phone_call.initiator),
     )
 
 

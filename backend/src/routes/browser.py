@@ -60,6 +60,7 @@ async def outbound_call(
 
     await insert_phone_call(
         phone_call_id,
+        user.email,
         "no-sid",
         request.user_info,
         from_phone_number,

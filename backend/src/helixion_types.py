@@ -252,6 +252,7 @@ class PhoneCallMetadata(BaseModel):
     agent_metadata: AgentMetadata
     call_type: PhoneCallType
     end_reason: Optional[PhoneCallEndReason] = None
+    initiator: Optional[str] = None
 
 
 class Speaker(str, Enum):

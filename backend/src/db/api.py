@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 async def insert_phone_call(
     id: SerializedUUID,
+    initiator: str,
     call_sid: str,
     input_data: dict,
     from_phone_number: str,
@@ -43,6 +44,7 @@ async def insert_phone_call(
             to_phone_number=to_phone_number,
             agent_id=agent_id,
             call_type=call_type.value,
+            initiator=initiator,
         )
     )
 

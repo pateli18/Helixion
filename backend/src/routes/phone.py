@@ -133,6 +133,7 @@ async def inbound_call(
         phone_call_id = uuid4()
         await insert_phone_call(
             phone_call_id,
+            "caller",
             payload["CallSid"],
             {},
             payload["From"],
@@ -201,6 +202,7 @@ async def outbound_call(
 
     await insert_phone_call(
         phone_call_id,
+        user.email,
         cast(str, call.sid),
         request.user_info,
         from_phone_number,

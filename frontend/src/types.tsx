@@ -27,6 +27,7 @@ export type PhoneCallMetadata = {
   agent_metadata: AgentMetadata;
   call_type: PhoneCallType;
   end_reason: string | null;
+  initiator: string | null;
 };
 
 export type SpeakerSegment = {

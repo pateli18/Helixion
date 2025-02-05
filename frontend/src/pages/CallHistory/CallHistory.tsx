@@ -128,7 +128,7 @@ const CallHistoryTable = memo(
               <TooltipTrigger>
                 <ClickToCopy
                   text={row.original.id}
-                  className="max-w-[100px] text-ellipsis overflow-hidden whitespace-nowrap"
+                  className="max-w-[50px] text-ellipsis overflow-hidden whitespace-nowrap"
                 />
               </TooltipTrigger>
               <TooltipContent>{row.original.id}</TooltipContent>
@@ -141,6 +141,13 @@ const CallHistoryTable = memo(
         header: "Date",
         cell: ({ row }: any) => {
           return <div>{loadAndFormatDate(row.original.created_at)}</div>;
+        },
+      },
+      {
+        accessorKey: "initiator",
+        header: "Initiator",
+        cell: ({ row }: any) => {
+          return <div>{row.original.initiator}</div>;
         },
       },
       {
@@ -210,11 +217,7 @@ const CallHistoryTable = memo(
         accessorKey: "end_reason",
         header: "End Reason",
         cell: ({ row }: any) => {
-          return (
-            <Badge variant="secondary" className="cursor-default">
-              {row.original.end_reason}
-            </Badge>
-          );
+          return <Badge variant="secondary">{row.original.end_reason}</Badge>;
         },
       },
       {
