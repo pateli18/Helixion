@@ -81,10 +81,6 @@ async def _validate_twilio_request(request: Request) -> dict:
     full_url = f"{scheme}://{host}{request.url.path}"
 
     form_data = await request.form()
-    logger.info(host)
-    logger.info(f"Full URL: {full_url}")
-    logger.info(f"Form data: {form_data}")
-    logger.info(signature)
     if not twilio_request_validator.validate(full_url, form_data, signature):
         raise HTTPException(status_code=403, detail="Invalid Twilio request")
 
