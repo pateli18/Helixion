@@ -80,7 +80,7 @@ export const HighlightedTextarea = (props: {
   };
 
   return (
-    <div className="relative w-full h-96 border rounded-md shadow-sm p-4 bg-white">
+    <div className="relative w-full h-[400px] border rounded-md shadow-sm p-4 bg-white">
       {/* Overlay div for highlights */}
       <div
         ref={overlayRef}

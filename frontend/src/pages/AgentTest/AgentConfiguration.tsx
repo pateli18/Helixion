@@ -284,7 +284,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
       </div>
 
       {showDiff && previousVersion && props.activeAgent ? (
-        <div className="border rounded-md">
+        <div className="border rounded-md h-[400px] overflow-y-auto">
           <ReactDiffViewer
             oldValue={previousVersion.system_message}
             newValue={
@@ -298,6 +298,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
               diffContainer: {
                 fontSize: "12px",
                 fontFamily: "JetBrains Mono, monospace",
+                height: "100%",
               },
             }}
           />
