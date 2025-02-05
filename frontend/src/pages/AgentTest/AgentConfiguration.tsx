@@ -68,7 +68,7 @@ const CreateNewAgentModal = (props: {
       <DialogTrigger asChild>
         <Button>
           <PlusIcon className="w-4 h-4 mr-2" />
-          Create New Agent
+          New Agent
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -121,6 +121,23 @@ const findPreviousVersion = (
     : null;
 };
 
+const findNextVersion = (
+  agents: Agent[],
+  currentVersion: Agent
+): Agent | null => {
+  const sameBaseAgents = agents
+    .filter((a) => a.base_id === currentVersion.base_id)
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+  const currentIndex = sameBaseAgents.findIndex(
+    (a) => a.id === currentVersion.id
+  );
+  return currentIndex > 0 ? sameBaseAgents[currentIndex - 1] : null;
+};
+
 export const AgentConfiguration = (props: AgentConfigurationProps) => {
   const authInfo = useAuthInfo();
   const [saveLoading, setSaveLoading] = useState(false);
@@ -129,6 +146,10 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
 
   const previousVersion = props.activeAgent
     ? findPreviousVersion(props.agents, props.activeAgent)
+    : null;
+
+  const nextVersion = props.activeAgent
+    ? findNextVersion(props.agents, props.activeAgent)
     : null;
 
   const handleSaveVersion = async () => {
@@ -204,52 +225,6 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         />
       </div>
       <div className="flex items-center gap-2">
-        <div className="font-bold text-sm">Version</div>
-        <Select
-          value={props.agentId?.versionId}
-          onValueChange={(value) => {
-            const agent = props.agents.find(
-              (agent) => agent.base_id === props.agentId?.baseId
-            );
-            if (agent) {
-              props.setAgentId({
-                baseId: agent.base_id,
-                versionId: value,
-              });
-              setNewVersion(null);
-            }
-          }}
-        >
-          <SelectTrigger
-            disabled={props.activeAgent === null}
-            className="truncate text-ellipsis"
-          >
-            <SelectValue placeholder="Select Agent Version" />
-          </SelectTrigger>
-          <SelectContent>
-            <div className="overflow-y-scroll max-h-[200px]">
-              {props.agents
-                .filter((agent) => agent.base_id === props.agentId?.baseId)
-                .map((version) => (
-                  <SelectItem key={version.id} value={version.id}>
-                    <div className="flex space-x-2 items-center">
-                      <Badge variant="secondary">{version.user_email}</Badge>
-                      <div className="text-sm text-muted-foreground">
-                        {loadAndFormatDate(version.created_at)}
-                      </div>
-                      {version.active && (
-                        <Badge className="bg-green-500 text-white">
-                          active
-                        </Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-            </div>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex items-center gap-2">
         <div className="font-bold text-sm">Name</div>
         <Input
           placeholder="Enter Agent Name"
@@ -274,7 +249,82 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
       <div className="flex items-center gap-2">
         <div className="font-bold text-sm">Instructions</div>
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-sm text-muted-foreground">Show diff</span>
+          <Select
+            value={props.agentId?.versionId}
+            onValueChange={(value) => {
+              const agent = props.agents.find(
+                (agent) => agent.base_id === props.agentId?.baseId
+              );
+              if (agent) {
+                props.setAgentId({
+                  baseId: agent.base_id,
+                  versionId: value,
+                });
+                setNewVersion(null);
+              }
+            }}
+          >
+            <SelectTrigger
+              disabled={props.activeAgent === null}
+              className="w-[100px] text-xs"
+            >
+              Version
+            </SelectTrigger>
+            <SelectContent>
+              <div className="overflow-y-scroll max-h-[200px]">
+                {props.agents
+                  .filter((agent) => agent.base_id === props.agentId?.baseId)
+                  .map((version) => (
+                    <SelectItem key={version.id} value={version.id}>
+                      <div className="flex space-x-2 items-center">
+                        <Badge variant="secondary">{version.user_email}</Badge>
+                        <div className="text-sm text-muted-foreground">
+                          {loadAndFormatDate(version.created_at)}
+                        </div>
+                        {version.active && (
+                          <Badge className="bg-green-500 text-white">
+                            active
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+              </div>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!previousVersion || !props.activeAgent}
+            onClick={() => {
+              if (previousVersion) {
+                props.setAgentId({
+                  baseId: previousVersion.base_id,
+                  versionId: previousVersion.id,
+                });
+                setNewVersion(null);
+              }
+            }}
+          >
+            Prev
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!nextVersion || !props.activeAgent}
+            onClick={() => {
+              if (nextVersion) {
+                props.setAgentId({
+                  baseId: nextVersion.base_id,
+                  versionId: nextVersion.id,
+                });
+                setNewVersion(null);
+              }
+            }}
+          >
+            Next
+          </Button>
+          <span className="text-xs text-muted-foreground">Diff</span>
           <Switch
             checked={showDiff}
             onCheckedChange={setShowDiff}
