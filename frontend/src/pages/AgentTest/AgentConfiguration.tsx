@@ -10,7 +10,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Agent } from "@/types";
-import { createNewAgentVersion, createAgent } from "@/utils/apiCalls";
+import {
+  createNewAgentVersion,
+  createAgent,
+  activateAgentVersion,
+} from "@/utils/apiCalls";
 import { loadAndFormatDate } from "@/utils/dateFormat";
 import { PlusIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
@@ -185,6 +189,28 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
     }
   };
 
+  const handleMakeActive = async (agent: Agent) => {
+    const response = await activateAgentVersion(
+      agent.id,
+      authInfo.accessToken ?? null
+    );
+    if (response === true) {
+      props.setAgents((prev) => {
+        const newAgents = prev.map((a) => {
+          if (a.base_id === agent.base_id) {
+            // Set all versions of this agent to inactive
+            return { ...a, active: a.id === agent.id };
+          }
+          return a;
+        });
+        return newAgents;
+      });
+      toast.success("Agent version updated");
+    } else {
+      toast.error("Failed to update agent version");
+    }
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -249,6 +275,17 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
       <div className="flex items-center gap-2">
         <div className="font-bold text-sm">Instructions</div>
         <div className="flex items-center gap-2 ml-auto">
+          {props.activeAgent?.active ? (
+            <Badge className="bg-green-500 text-white">Active</Badge>
+          ) : (
+            <Button
+              className="bg-green-500 text-black"
+              size="sm"
+              onClick={() => handleMakeActive(props.activeAgent!)}
+            >
+              Make Active
+            </Button>
+          )}
           <Select
             value={props.agentId?.versionId}
             onValueChange={(value) => {

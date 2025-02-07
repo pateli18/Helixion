@@ -1,19 +1,28 @@
 import json
 import logging
-from typing import cast
+from typing import Union, cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
 
+from src.ai.instructions_update import (
+    generate_updated_instructions_from_report,
+)
 from src.ai.prompts import default_system_prompt
 from src.ai.sample_values import generate_sample_values
 from src.auth import User, require_user
-from src.db.api import get_agent, get_agents, insert_agent
+from src.db.api import (
+    get_agent,
+    get_agents,
+    get_analytics_report,
+    insert_agent,
+    make_agent_active,
+)
 from src.db.base import get_session
 from src.db.converter import convert_agent_model
-from src.helixion_types import Agent, AgentBase
+from src.helixion_types import Agent, AgentBase, SerializedUUID
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +129,77 @@ async def get_sample_values(
         return {}
     output = await generate_sample_values(request.fields)
     return output
+
+
+class UpdateInstructionsFromReportResponse(BaseModel):
+    base_id: SerializedUUID
+    version_id: SerializedUUID
+
+
+@router.post(
+    "/update-instructions-from-report/{agent_id}/{report_id}",
+    response_model=UpdateInstructionsFromReportResponse,
+)
+async def update_instructions_from_report(
+    agent_id: SerializedUUID,
+    report_id: SerializedUUID,
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+) -> UpdateInstructionsFromReportResponse:
+    agent = await get_agent(agent_id, db)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if cast(str, agent.organization_id) != user.active_org_id:
+        raise HTTPException(status_code=403, detail="Agent not found")
+    report = await get_analytics_report(report_id, db)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.group.organization_id != user.active_org_id:
+        raise HTTPException(status_code=403, detail="Report not found")
+    updated_instructions = await generate_updated_instructions_from_report(
+        cast(str, agent.system_message), cast(str, report.text)
+    )
+    base_id = cast(SerializedUUID, agent.base_id)
+    new_agent_id = await insert_agent(
+        AgentBase(
+            name=cast(str, agent.name),
+            system_message=updated_instructions,
+            base_id=base_id,
+            active=False,
+            sample_values=cast(dict, agent.sample_values),
+            incoming_phone_number=cast(
+                Union[str, None], agent.incoming_phone_number
+            ),
+        ),
+        user.user_id,
+        cast(str, user.active_org_id),
+        db,
+    )
+    await db.commit()
+    return UpdateInstructionsFromReportResponse(
+        base_id=base_id,
+        version_id=new_agent_id,
+    )
+
+
+@router.post(
+    "/activate-version/{version_id}",
+    status_code=204,
+)
+async def activate_version(
+    version_id: SerializedUUID,
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+):
+    agent = await get_agent(version_id, db)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if cast(str, agent.organization_id) != user.active_org_id:
+        raise HTTPException(
+            status_code=403, detail="You do not have access to this agent"
+        )
+    await make_agent_active(
+        version_id, cast(SerializedUUID, agent.base_id), db
+    )
+    await db.commit()
+    return Response(status_code=204)

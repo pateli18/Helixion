@@ -156,6 +156,11 @@ class StreamOptions(BaseModel):
     include_usage: bool
 
 
+class Prediction(BaseModel):
+    type: Literal["content"] = "content"
+    content: Union[str, list[ModelChatContent]]
+
+
 class OpenAiChatInput(BaseModel):
     messages: list[ModelChat]
     model: ModelType
@@ -170,6 +175,7 @@ class OpenAiChatInput(BaseModel):
     top_logprobs: Optional[int] = None
     response_format: Optional[ResponseType] = None
     stream_options: Optional[StreamOptions] = None
+    prediction: Optional[Prediction] = None
 
     @property
     def data(self) -> dict:

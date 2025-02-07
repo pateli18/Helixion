@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from src.db.models import (
     AgentDocumentModel,
     AgentModel,
+    AnalyticsReportModel,
     AnalyticsTagGroupModel,
     DocumentModel,
     OrganizationModel,
@@ -268,3 +269,31 @@ async def get_analytics_groups(
         .options(selectinload(AnalyticsTagGroupModel.reports))
     )
     return list(result.scalars().all())
+
+
+async def get_analytics_report(
+    report_id: SerializedUUID, db: async_scoped_session
+) -> Optional[AnalyticsReportModel]:
+    result = await db.execute(
+        select(AnalyticsReportModel)
+        .options(selectinload(AnalyticsReportModel.group))
+        .where(AnalyticsReportModel.id == report_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def make_agent_active(
+    version_id: SerializedUUID,
+    base_id: SerializedUUID,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        update(AgentModel)
+        .where(AgentModel.base_id == base_id)
+        .values(active=False)
+    )
+    await db.execute(
+        update(AgentModel)
+        .where(AgentModel.id == version_id)
+        .values(active=True)
+    )

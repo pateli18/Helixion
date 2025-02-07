@@ -1,6 +1,8 @@
 import base64
+import io
 import json
 import logging
+import wave
 from typing import Optional
 
 import numpy as np
@@ -252,3 +254,13 @@ def audio_bytes_to_ms(
     audio_bytes: bytes, bytes_per_sample: int, sample_rate: int
 ) -> int:
     return int((len(audio_bytes) / bytes_per_sample) * 1000 / sample_rate)
+
+
+def pcm_to_wav_buffer(audio_data: bytes, sample_rate: int) -> io.BytesIO:
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(audio_data)
+    return wav_buffer

@@ -95,7 +95,7 @@ class AiSessionConfiguration(BaseModel):
             turn_detection=TurnDetection(),
             input_audio_format=audio_format,
             output_audio_format=audio_format,
-            voice="coral",
+            voice="shimmer",
             instructions=system_message,
             tools=tools,
             input_audio_transcription={

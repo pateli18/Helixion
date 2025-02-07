@@ -31,7 +31,11 @@ from src.audio.audio_router import (
     twilio_client,
     twilio_request_validator,
 )
-from src.audio.data_processing import calculate_bar_heights, process_audio_data
+from src.audio.data_processing import (
+    calculate_bar_heights,
+    pcm_to_wav_buffer,
+    process_audio_data,
+)
 from src.audio.sounds import get_sound_base64
 from src.auth import User, require_user
 from src.aws_utils import S3Client
@@ -425,12 +429,7 @@ async def _handle_audio_playback_download_log_file(
         samples, 50, speaker_segments, sample_rate
     )
 
-    wav_buffer = io.BytesIO()
-    with wave.open(wav_buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_data)
+    wav_buffer = pcm_to_wav_buffer(audio_data, sample_rate)
     audio_data_b64 = base64.b64encode(wav_buffer.getvalue()).decode("utf-8")
 
     return AudioTranscriptResponse(

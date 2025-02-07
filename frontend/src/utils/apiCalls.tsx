@@ -238,3 +238,42 @@ export const getAnalyticsGroups = async (accessToken: string | null) => {
   }
   return response;
 };
+
+export const updateInstructionsFromReport = async (
+  agentId: string,
+  reportId: string,
+  accessToken: string | null
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<{
+      base_id: string;
+      version_id: string;
+    }>({
+      url: `${baseUrl}/api/v1/agent/update-instructions-from-report/${agentId}/${reportId}`,
+      method: "POST",
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const activateAgentVersion = async (
+  versionId: string,
+  accessToken: string | null
+) => {
+  let response = false;
+  try {
+    await Ajax.req({
+      url: `${baseUrl}/api/v1/agent/activate-version/${versionId}`,
+      method: "POST",
+      accessToken,
+    });
+    response = true;
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};

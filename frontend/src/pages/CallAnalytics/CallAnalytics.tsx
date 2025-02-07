@@ -17,8 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AnalyticsGroup, AnalyticsReport, PhoneCallMetadata } from "@/types";
-import { getAnalyticsGroups, getCallHistory } from "@/utils/apiCalls";
+import {
+  Agent,
+  AnalyticsGroup,
+  AnalyticsReport,
+  PhoneCallMetadata,
+} from "@/types";
+import {
+  getAgents,
+  getAnalyticsGroups,
+  getCallHistory,
+  updateInstructionsFromReport,
+} from "@/utils/apiCalls";
 import { useAuthInfo } from "@propelauth/react";
 import { BarChart, XAxis } from "recharts";
 import { memo, useEffect, useState } from "react";
@@ -26,6 +36,18 @@ import { Bar } from "recharts";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkdownCitationDisplay } from "@/components/MarkdownDisplay";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { ReloadIcon } from "@radix-ui/react-icons";
 
 const MAX_BARS = 30;
 
@@ -225,64 +247,145 @@ const TagView = (props: {
   );
 };
 
-const ReportView = (props: {
+const UpdateAgentInstructionsDialog = (props: {
+  selectedReport: AnalyticsReport;
+}) => {
+  const authInfo = useAuthInfo();
+  const navigate = useNavigate();
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const fetchAgents = async () => {
+      const agentsResponse = await getAgents(authInfo.accessToken ?? null);
+      if (agentsResponse !== null) {
+        setAgents(agentsResponse.filter((agent) => agent.active === true));
+      } else {
+        toast.error("Failed to fetch agents");
+      }
+    };
+    fetchAgents();
+  }, []);
+
+  const updateInstructions = async () => {
+    if (selectedAgent) {
+      setIsUpdating(true);
+      const response = await updateInstructionsFromReport(
+        selectedAgent.id,
+        props.selectedReport.id,
+        authInfo.accessToken ?? null
+      );
+      setIsUpdating(false);
+      if (response !== null) {
+        toast.success("Agent instructions updated");
+        navigate(
+          `/?baseId=${response.base_id}&versionId=${response.version_id}`
+        );
+      } else {
+        toast.error("Failed to update agent instructions");
+      }
+    }
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button>Update Agent</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update Agent Instructions</DialogTitle>
+          <DialogDescription>
+            Use the report findings to improve the agent's instructions.
+          </DialogDescription>
+        </DialogHeader>
+        <Select
+          value={selectedAgent?.id}
+          onValueChange={(value) => {
+            const agent = agents.find((agent) => agent.id === value);
+            setSelectedAgent(agent ?? null);
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select Agent" />
+          </SelectTrigger>
+          <SelectContent>
+            {agents.map((agent) => (
+              <SelectItem key={agent.id} value={agent.id}>
+                {agent.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DialogFooter>
+          <Button
+            disabled={selectedAgent === null || isUpdating}
+            onClick={updateInstructions}
+          >
+            Update Agent{" "}
+            {isUpdating && <ReloadIcon className="w-4 h-4 ml-2 animate-spin" />}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const ReportSelection = (props: {
   reports: AnalyticsReport[];
+  selectedReport: AnalyticsReport | null;
+  setSelectedReport: (report: AnalyticsReport) => void;
+}) => {
+  return (
+    <Select
+      value={props.selectedReport?.id}
+      onValueChange={(value) => {
+        const report = props.reports.find((report) => report.id === value);
+        if (report) {
+          props.setSelectedReport(report);
+        }
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Select Report" />
+      </SelectTrigger>
+      <SelectContent>
+        {props.reports.map((report) => (
+          <SelectItem key={report.id} value={report.id}>
+            {report.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+const ReportView = (props: {
+  selectedReport: AnalyticsReport | null;
   callHistory: PhoneCallMetadata[];
 }) => {
   const [selectedCall, setSelectedCall] = useState<PhoneCallMetadata | null>(
     null
   );
-  const [selectedReport, setSelectedReport] = useState<AnalyticsReport | null>(
-    null
-  );
-
-  useEffect(() => {
-    if (props.reports.length > 0) {
-      setSelectedReport(props.reports[0]);
-    }
-  }, [props.reports]);
 
   return (
     <>
-      {props.reports.length > 0 ? (
+      {props.selectedReport ? (
         <>
           <div className="px-1 pb-4 space-y-4">
-            <Select
-              value={selectedReport?.id}
-              onValueChange={(value) => {
-                const report = props.reports.find(
-                  (report) => report.id === value
+            <MarkdownCitationDisplay
+              text={props.selectedReport.text}
+              phoneMetadata={props.callHistory}
+              onCitationClick={(citationId) => {
+                const call = props.callHistory.find(
+                  (call) => call.id === citationId
                 );
-                if (report) {
-                  setSelectedReport(report);
+                if (call) {
+                  setSelectedCall(call);
                 }
               }}
-            >
-              <SelectTrigger className="truncate text-ellipsis max-w-[600px]">
-                <SelectValue placeholder="Select Report" />
-              </SelectTrigger>
-              <SelectContent>
-                {props.reports.map((report) => (
-                  <SelectItem key={report.id} value={report.id}>
-                    {report.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedReport && (
-              <MarkdownCitationDisplay
-                text={selectedReport.text}
-                phoneMetadata={props.callHistory}
-                onCitationClick={(citationId) => {
-                  const call = props.callHistory.find(
-                    (call) => call.id === citationId
-                  );
-                  if (call) {
-                    setSelectedCall(call);
-                  }
-                }}
-              />
-            )}
+            />
           </div>
           <CallDisplay call={selectedCall} setCall={setSelectedCall} />
         </>
@@ -304,6 +407,18 @@ export const CallAnalyticsPage = () => {
   const [selectedGroup, setSelectedGroup] = useState<AnalyticsGroup | null>(
     null
   );
+  const [selectedReport, setSelectedReport] = useState<AnalyticsReport | null>(
+    null
+  );
+  const [activeTab, setActiveTab] = useState<"tag" | "report">("tag");
+
+  useEffect(() => {
+    if (selectedGroup?.reports && selectedGroup.reports.length > 0) {
+      setSelectedReport(selectedGroup.reports[0]);
+    } else {
+      setSelectedReport(null);
+    }
+  }, [selectedGroup]);
 
   const fetchData = async () => {
     const [analyticsGroupsResponse, callHistoryResponse] = await Promise.all([
@@ -346,11 +461,32 @@ export const CallAnalyticsPage = () => {
               setSelectedGroup={setSelectedGroup}
             />
             {selectedGroup && (
-              <Tabs defaultValue="tag">
-                <TabsList>
-                  <TabsTrigger value="tag">Data</TabsTrigger>
-                  <TabsTrigger value="report">Reports</TabsTrigger>
-                </TabsList>
+              <Tabs
+                value={activeTab}
+                onValueChange={(value) =>
+                  setActiveTab(value as "tag" | "report")
+                }
+              >
+                <div className="flex items-center space-x-2 max-w-[600px]">
+                  <TabsList>
+                    <TabsTrigger value="tag">Data</TabsTrigger>
+                    <TabsTrigger value="report">Reports</TabsTrigger>
+                  </TabsList>
+                  {activeTab === "report" &&
+                    selectedGroup.reports &&
+                    selectedGroup.reports.length > 0 && (
+                      <ReportSelection
+                        reports={selectedGroup.reports}
+                        selectedReport={selectedReport}
+                        setSelectedReport={setSelectedReport}
+                      />
+                    )}
+                  {activeTab === "report" && selectedReport !== null && (
+                    <UpdateAgentInstructionsDialog
+                      selectedReport={selectedReport}
+                    />
+                  )}
+                </div>
                 <TabsContent value="tag">
                   <TagView
                     callHistory={callHistory}
@@ -360,7 +496,7 @@ export const CallAnalyticsPage = () => {
                 <TabsContent value="report">
                   <ReportView
                     callHistory={callHistory}
-                    reports={selectedGroup.reports}
+                    selectedReport={selectedReport}
                   />
                 </TabsContent>
               </Tabs>
