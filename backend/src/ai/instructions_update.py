@@ -4,6 +4,7 @@ from src.helixion_types import (
     ModelChatType,
     ModelType,
     OpenAiChatInput,
+    Prediction,
 )
 
 
@@ -30,6 +31,7 @@ async def generate_updated_instructions_from_report(
     model_payload = OpenAiChatInput(
         messages=model_chat,
         model=ModelType.gpt4o,
+        prediction=Prediction(content=instructions),
     )
 
     response = await send_openai_request(
