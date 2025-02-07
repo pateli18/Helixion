@@ -232,23 +232,57 @@ const ReportView = (props: {
   const [selectedCall, setSelectedCall] = useState<PhoneCallMetadata | null>(
     null
   );
+  const [selectedReport, setSelectedReport] = useState<AnalyticsReport | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (props.reports.length > 0) {
+      setSelectedReport(props.reports[0]);
+    }
+  }, [props.reports]);
+
   return (
     <>
       {props.reports.length > 0 ? (
         <>
-          <div className="px-4 pb-4 w-full">
-            <MarkdownCitationDisplay
-              text={props.reports[0].text}
-              phoneMetadata={props.callHistory}
-              onCitationClick={(citationId) => {
-                const call = props.callHistory.find(
-                  (call) => call.id === citationId
+          <div className="px-1 pb-4 space-y-4">
+            <Select
+              value={selectedReport?.id}
+              onValueChange={(value) => {
+                const report = props.reports.find(
+                  (report) => report.id === value
                 );
-                if (call) {
-                  setSelectedCall(call);
+                if (report) {
+                  setSelectedReport(report);
                 }
               }}
-            />
+            >
+              <SelectTrigger className="truncate text-ellipsis max-w-[600px]">
+                <SelectValue placeholder="Select Report" />
+              </SelectTrigger>
+              <SelectContent>
+                {props.reports.map((report) => (
+                  <SelectItem key={report.id} value={report.id}>
+                    {report.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedReport && (
+              <MarkdownCitationDisplay
+                text={selectedReport.text}
+                phoneMetadata={props.callHistory}
+                onCitationClick={(citationId) => {
+                  const call = props.callHistory.find(
+                    (call) => call.id === citationId
+                  );
+                  if (call) {
+                    setSelectedCall(call);
+                  }
+                }}
+              />
+            )}
           </div>
           <CallDisplay call={selectedCall} setCall={setSelectedCall} />
         </>
@@ -315,7 +349,7 @@ export const CallAnalyticsPage = () => {
               <Tabs defaultValue="tag">
                 <TabsList>
                   <TabsTrigger value="tag">Data</TabsTrigger>
-                  <TabsTrigger value="report">Report</TabsTrigger>
+                  <TabsTrigger value="report">Reports</TabsTrigger>
                 </TabsList>
                 <TabsContent value="tag">
                   <TagView
