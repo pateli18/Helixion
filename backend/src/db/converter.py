@@ -1,9 +1,12 @@
 from typing import Optional, cast
 
-from src.db.models import AgentModel, PhoneCallModel
+from src.db.models import AgentModel, AnalyticsTagGroupModel, PhoneCallModel
 from src.helixion_types import (
     Agent,
     AgentMetadata,
+    AnalyticsGroup,
+    AnalyticsReport,
+    AnalyticsTag,
     DocumentMetadata,
     PhoneCallEndReason,
     PhoneCallMetadata,
@@ -39,6 +42,15 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
             "CallDuration": None,
         }
 
+    if phone_call.agent_id is None:
+        agent_metadata = None
+    else:
+        agent_metadata = AgentMetadata(
+            base_id=phone_call.agent.base_id,
+            name=phone_call.agent.name,
+            version_id=phone_call.agent.id,
+        )
+
     return PhoneCallMetadata(
         id=cast(SerializedUUID, phone_call.id),
         from_phone_number=cast(str, phone_call.from_phone_number),
@@ -48,11 +60,7 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
         created_at=phone_call.created_at,
         duration=event_payload.get("CallDuration"),
         recording_available=phone_call.call_data is not None,
-        agent_metadata=AgentMetadata(
-            base_id=phone_call.agent.base_id,
-            name=phone_call.agent.name,
-            version_id=phone_call.agent.id,
-        ),
+        agent_metadata=agent_metadata,
         call_type=cast(PhoneCallType, phone_call.call_type),
         end_reason=cast(Optional[PhoneCallEndReason], phone_call.end_reason),
         initiator=cast(Optional[str], phone_call.initiator),
@@ -77,4 +85,29 @@ def convert_agent_model(agent: AgentModel) -> Agent:
         sample_values=cast(Optional[dict], agent.sample_values) or {},
         incoming_phone_number=cast(Optional[str], agent.incoming_phone_number),
         user_email=cast(str, agent.user.email),
+    )
+
+
+def convert_analytics_tag_group_model(
+    tag_group: AnalyticsTagGroupModel,
+) -> AnalyticsGroup:
+    return AnalyticsGroup(
+        id=cast(SerializedUUID, tag_group.id),
+        name=cast(str, tag_group.name),
+        tags=[
+            AnalyticsTag(
+                id=tag.id,
+                tag=tag.tag,
+                phone_call_id=tag.phone_call_id,
+            )
+            for tag in tag_group.tags
+        ],
+        reports=[
+            AnalyticsReport(
+                id=report.id,
+                name=report.name,
+                text=report.text,
+            )
+            for report in tag_group.reports
+        ],
     )

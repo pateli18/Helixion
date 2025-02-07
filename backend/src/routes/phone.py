@@ -2,12 +2,15 @@ import asyncio
 import audioop
 import base64
 import io
+import json
 import logging
 import wave
 import zipfile
 from typing import AsyncGenerator, cast
 from uuid import uuid4
 
+import librosa
+import numpy as np
 from fastapi import (
     APIRouter,
     Depends,
@@ -55,6 +58,7 @@ from src.helixion_types import (
     PhoneCallStatus,
     PhoneCallType,
     SerializedUUID,
+    Speaker,
     SpeakerSegment,
 )
 from src.settings import settings
@@ -140,6 +144,7 @@ async def inbound_call(
             to_number,
             cast(SerializedUUID, agent.id),
             PhoneCallType.inbound,
+            cast(str, agent.organization_id),
             db,
         )
         await insert_phone_call_event(
@@ -209,6 +214,7 @@ async def outbound_call(
         request.phone_number,
         request.agent_id,
         PhoneCallType.outbound,
+        cast(str, user.active_org_id),
         db,
     )
     await db.commit()
@@ -352,6 +358,88 @@ class AudioTranscriptResponse(BaseModel):
     bar_heights: list[BarHeight]
     total_duration: float
     audio_data_b64: str
+    content_type: str
+
+
+async def _handle_audio_playback_download_upload_file(
+    s3_client: S3Client,
+    file_path: str,
+) -> AudioTranscriptResponse:
+    audio_coro = s3_client.download_file(f"{file_path}/audio.mp3")
+    transcript_coro = s3_client.download_file(f"{file_path}/transcript.json")
+    (audio_data, _, _), (transcript_data, _, _) = await asyncio.gather(
+        audio_coro, transcript_coro
+    )
+
+    samples, sample_rate = librosa.load(
+        io.BytesIO(audio_data), sr=24000, mono=True
+    )
+
+    speaker_segments = [
+        SpeakerSegment(
+            timestamp=0,
+            speaker=Speaker.user,
+            transcript=json.loads(transcript_data)["text"],
+            item_id="first-item-id",
+        )
+    ]
+
+    bar_heights = calculate_bar_heights(
+        samples, 50, speaker_segments, int(sample_rate)
+    )
+
+    audio_data_b64 = base64.b64encode(audio_data).decode("utf-8")
+    return AudioTranscriptResponse(
+        speaker_segments=speaker_segments,
+        bar_heights=bar_heights,
+        total_duration=len(samples) / sample_rate,
+        audio_data_b64=audio_data_b64,
+        content_type="audio/mpeg",
+    )
+
+
+async def _handle_audio_playback_download_log_file(
+    s3_client: S3Client,
+    file_path: str,
+    browser_call: bool,
+) -> AudioTranscriptResponse:
+    file_data, mime_type, _ = await s3_client.download_file(file_path)
+
+    if mime_type == "application/zip":
+        # Handle zipped file
+        with zipfile.ZipFile(io.BytesIO(file_data)) as zip_file:
+            # Get first file in zip (should be the log file)
+            log_filename = zip_file.namelist()[0]
+            with zip_file.open(log_filename) as log_file:
+                log_data = log_file.read()
+    else:
+        # Handle unzipped file
+        log_data = file_data
+    sample_rate = 8000 if not browser_call else 24000
+    speaker_segments, audio_data = process_audio_data(log_data, sample_rate)
+    if sample_rate == 8000:
+        audio_data = audioop.ulaw2lin(audio_data, 2)
+
+    samples = np.frombuffer(audio_data, dtype=np.int16)
+    bar_heights = calculate_bar_heights(
+        samples, 50, speaker_segments, sample_rate
+    )
+
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(audio_data)
+    audio_data_b64 = base64.b64encode(wav_buffer.getvalue()).decode("utf-8")
+
+    return AudioTranscriptResponse(
+        speaker_segments=speaker_segments,
+        bar_heights=bar_heights,
+        total_duration=len(audio_data) / 2 / sample_rate,
+        audio_data_b64=audio_data_b64,
+        content_type="audio/wav",
+    )
 
 
 @router.get(
@@ -366,47 +454,22 @@ async def get_audio_playback(
     phone_call = await get_phone_call(phone_call_id, db)
     if phone_call is None:
         raise HTTPException(status_code=404, detail="Phone call not found")
-    if not await check_organization_owns_agent(
-        phone_call.agent.id, cast(str, user.active_org_id), db
-    ):
-        raise HTTPException(status_code=403, detail="Phone call not found")
+    if cast(str, phone_call.organization_id) != cast(str, user.active_org_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied to access this phone call",
+        )
     async with S3Client() as s3_client:
         file_path = cast(str, phone_call.call_data)
-        file_data, mime_type, _ = await s3_client.download_file(file_path)
-
-        if mime_type == "application/zip":
-            # Handle zipped file
-            with zipfile.ZipFile(io.BytesIO(file_data)) as zip_file:
-                # Get first file in zip (should be the log file)
-                log_filename = zip_file.namelist()[0]
-                with zip_file.open(log_filename) as log_file:
-                    log_data = log_file.read()
+        if "/logs/" in file_path:
+            response = await _handle_audio_playback_download_log_file(
+                s3_client,
+                file_path,
+                cast(str, phone_call.from_phone_number) == BROWSER_NAME,
+            )
         else:
-            # Handle unzipped file
-            log_data = file_data
-    (sample_rate) = (
-        8000
-        if cast(str, phone_call.from_phone_number) != BROWSER_NAME
-        else 24000
-    )
-    speaker_segments, audio_data = process_audio_data(log_data, sample_rate)
-    if sample_rate == 8000:
-        audio_data = audioop.ulaw2lin(audio_data, 2)
-    bar_heights = calculate_bar_heights(
-        audio_data, 50, speaker_segments, sample_rate
-    )
+            response = await _handle_audio_playback_download_upload_file(
+                s3_client, file_path
+            )
 
-    # conver audio to wav and then b64
-    wav_buffer = io.BytesIO()
-    with wave.open(wav_buffer, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_data)
-    audio_data_b64 = base64.b64encode(wav_buffer.getvalue()).decode("utf-8")
-    return AudioTranscriptResponse(
-        speaker_segments=speaker_segments,
-        bar_heights=bar_heights,
-        total_duration=len(audio_data) / 2 / sample_rate,
-        audio_data_b64=audio_data_b64,
-    )
+    return response

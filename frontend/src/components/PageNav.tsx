@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { PersonIcon } from "@radix-ui/react-icons";
-import { ArchiveIcon } from "lucide-react";
+import { ArchiveIcon, BarChartIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { UserNav } from "./UserNav";
 import { useAuthInfo } from "@propelauth/react";
@@ -83,15 +83,16 @@ export const PageSidebar = () => {
           <SidebarGroupLabel>Pages</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarItem
-                icon={<PersonIcon />}
-                label="Agent Tester"
-                href="/"
-              />
+              <SidebarItem icon={<PersonIcon />} label="Agents" href="/" />
               <SidebarItem
                 icon={<ArchiveIcon />}
                 label="Call History"
                 href="/call-history"
+              />
+              <SidebarItem
+                icon={<BarChartIcon />}
+                label="Call Analytics"
+                href="/call-analytics"
               />
             </SidebarMenu>
           </SidebarGroupContent>

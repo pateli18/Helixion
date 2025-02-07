@@ -107,7 +107,7 @@ export const CallDisplay = (props: {
                 c.charCodeAt(0)
               ),
             ],
-            { type: "audio/wav" }
+            { type: playback.content_type }
           );
           const audioURL = URL.createObjectURL(blob);
 

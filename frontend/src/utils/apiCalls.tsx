@@ -1,4 +1,10 @@
-import { Agent, BarHeight, PhoneCallMetadata, SpeakerSegment } from "@/types";
+import {
+  Agent,
+  AnalyticsGroup,
+  BarHeight,
+  PhoneCallMetadata,
+  SpeakerSegment,
+} from "@/types";
 import Ajax from "./Ajax";
 
 export let baseUrl = "";
@@ -122,6 +128,7 @@ export const getAudioPlayback = async (
       bar_heights: BarHeight[];
       total_duration: number;
       audio_data_b64: string;
+      content_type: string;
     }>({
       url: `${baseUrl}/api/v1/phone/playback/${phoneCallId}`,
       method: "GET",
@@ -210,6 +217,20 @@ export const getSampleValues = async (
       url: `${baseUrl}/api/v1/agent/sample-values`,
       method: "POST",
       body: { fields },
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const getAnalyticsGroups = async (accessToken: string | null) => {
+  let response = null;
+  try {
+    response = await Ajax.req<AnalyticsGroup[]>({
+      url: `${baseUrl}/api/v1/analytics/groups`,
+      method: "GET",
       accessToken,
     });
   } catch (error) {

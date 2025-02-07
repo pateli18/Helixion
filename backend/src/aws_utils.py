@@ -4,6 +4,7 @@ from typing import AsyncContextManager, Optional
 
 from aiobotocore.client import AioBaseClient
 from aiobotocore.session import AioSession
+from botocore.exceptions import ClientError
 
 from src.settings import settings
 
@@ -56,3 +57,18 @@ class S3Client(AsyncContextManager["S3Client"]):
         response = await self._s3_client.get_object(Bucket=bucket, Key=prefix)  # type: ignore
         body = await response["Body"].read()
         return body, response["ContentType"], response["ETag"]
+
+    async def check_file_exists(self, filepath: str) -> bool:
+        bucket, prefix = self.bucket_prefix_from_file_url(filepath)
+        try:
+            await self._s3_client.head_object(Bucket=bucket, Key=prefix)  # type: ignore
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in ("404", "NoSuchKey", "NotFound"):
+                logger.info(
+                    f"File {filepath} not found (error code: {error_code})"
+                )
+                return False
+            else:
+                raise e
+        return True

@@ -18,6 +18,7 @@ export type PhoneCallType = "inbound" | "outbound";
 
 export type PhoneCallMetadata = {
   id: string;
+  call_sid: string;
   from_phone_number: string;
   to_phone_number: string;
   input_data: Record<string, unknown>;
@@ -25,7 +26,7 @@ export type PhoneCallMetadata = {
   created_at: string;
   duration?: number;
   recording_available: boolean;
-  agent_metadata: AgentMetadata;
+  agent_metadata: AgentMetadata | null;
   call_type: PhoneCallType;
   end_reason: string | null;
   initiator: string | null;
@@ -59,4 +60,23 @@ export type Agent = {
 export type DocumentMetadata = {
   id: string;
   name: string;
+};
+
+export type AnalyticsTag = {
+  id: string;
+  tag: string;
+  phone_call_id: string;
+};
+
+export type AnalyticsReport = {
+  id: string;
+  name: string;
+  text: string;
+};
+
+export type AnalyticsGroup = {
+  id: string;
+  name: string;
+  tags: AnalyticsTag[];
+  reports: AnalyticsReport[];
 };

@@ -250,7 +250,7 @@ class PhoneCallMetadata(BaseModel):
     created_at: SerializedDateTime
     duration: Optional[int] = None
     recording_available: bool
-    agent_metadata: AgentMetadata
+    agent_metadata: Optional[AgentMetadata]
     call_type: PhoneCallType
     end_reason: Optional[PhoneCallEndReason] = None
     initiator: Optional[str] = None
@@ -303,3 +303,22 @@ class Document(BaseModel):
     id: SerializedUUID
     name: str
     text: str
+
+
+class AnalyticsTag(BaseModel):
+    id: SerializedUUID
+    tag: str
+    phone_call_id: SerializedUUID
+
+
+class AnalyticsReport(BaseModel):
+    id: SerializedUUID
+    name: str
+    text: str
+
+
+class AnalyticsGroup(BaseModel):
+    id: SerializedUUID
+    name: str
+    tags: list[AnalyticsTag]
+    reports: list[AnalyticsReport]

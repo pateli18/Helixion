@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from src.db.models import (
     AgentDocumentModel,
     AgentModel,
+    AnalyticsTagGroupModel,
     DocumentModel,
     OrganizationModel,
     PhoneCallEventModel,
@@ -31,8 +32,9 @@ async def insert_phone_call(
     input_data: dict,
     from_phone_number: str,
     to_phone_number: str,
-    agent_id: SerializedUUID,
+    agent_id: Optional[SerializedUUID],
     call_type: PhoneCallType,
+    organization_id: str,
     db: async_scoped_session,
 ) -> None:
     await db.execute(
@@ -45,6 +47,7 @@ async def insert_phone_call(
             agent_id=agent_id,
             call_type=call_type.value,
             initiator=initiator,
+            organization_id=organization_id,
         )
     )
 
@@ -106,10 +109,9 @@ async def get_phone_calls(
 ) -> list[PhoneCallModel]:
     result = await db.execute(
         select(PhoneCallModel)
-        .join(AgentModel)
         .options(selectinload(PhoneCallModel.events))
         .options(joinedload(PhoneCallModel.agent))
-        .where(AgentModel.organization_id == organization_id)
+        .where(PhoneCallModel.organization_id == organization_id)
         .order_by(PhoneCallModel.created_at.desc())
     )
     return list(result.scalars().all())
@@ -254,3 +256,15 @@ async def check_organization_owns_agent(
         .where(AgentModel.organization_id == organization_id)
     )
     return result.scalar_one_or_none() is not None
+
+
+async def get_analytics_groups(
+    organization_id: str, db: async_scoped_session
+) -> list[AnalyticsTagGroupModel]:
+    result = await db.execute(
+        select(AnalyticsTagGroupModel)
+        .where(AnalyticsTagGroupModel.organization_id == organization_id)
+        .options(selectinload(AnalyticsTagGroupModel.tags))
+        .options(selectinload(AnalyticsTagGroupModel.reports))
+    )
+    return list(result.scalars().all())

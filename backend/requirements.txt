@@ -4,6 +4,7 @@ asyncpg
 cachetools
 fastapi
 httpx
+librosa
 numpy
 propelauth-fastapi
 pydantic-settings

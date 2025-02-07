@@ -201,16 +201,13 @@ def process_audio_data(
 
 
 def calculate_bar_heights(
-    pcm_data: bytes,
+    samples: np.ndarray,
     num_bars: int,
     speaker_segments: list[SpeakerSegment],
     sample_rate: int,
 ) -> list[BarHeight]:
     if len(speaker_segments) == 0:
         return []
-
-    # Convert bytes to numpy array of 16-bit integers
-    samples = np.frombuffer(pcm_data, dtype=np.int16)
 
     # Reshape samples into num_bars segments
     samples_per_bar = len(samples) // num_bars

@@ -7,7 +7,7 @@ import { ServicesProviderWrapper } from "./components/ServicesProviderWrapper";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { CallHistoryPage } from "./pages/CallHistory/CallHistory";
-
+import { CallAnalyticsPage } from "./pages/CallAnalytics/CallAnalytics";
 const container = document.getElementById("root");
 const root = createRoot(container!);
 
@@ -19,6 +19,7 @@ export const App = () => {
           <Routes>
             <Route path="/" element={<AgentTestPage />} />
             <Route path="/call-history" element={<CallHistoryPage />} />
+            <Route path="/call-analytics" element={<CallAnalyticsPage />} />
           </Routes>
           <Toaster richColors />
         </BrowserRouter>

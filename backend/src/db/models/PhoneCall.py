@@ -30,7 +30,7 @@ class PhoneCallModel(Base, TimestampMixin):
         server_default=text("uuid_generate_v4()"),
     )
     agent_id = Column(
-        UUID(as_uuid=True), ForeignKey("agent.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("agent.id"), nullable=True
     )
     call_sid = Column(VARCHAR, nullable=False)
     input_data = Column(JSONB, nullable=False)
@@ -40,6 +40,11 @@ class PhoneCallModel(Base, TimestampMixin):
     end_reason = Column(VARCHAR, nullable=True)
     call_type = Column(VARCHAR, nullable=False)
     initiator = Column(VARCHAR, nullable=True)
+    organization_id = Column(
+        VARCHAR,
+        ForeignKey("organization.id"),
+        nullable=False,
+    )
 
     events = relationship("PhoneCallEventModel", back_populates="phone_call")
     agent = relationship("AgentModel", back_populates="phone_calls")

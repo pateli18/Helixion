@@ -67,6 +67,7 @@ async def outbound_call(
         BROWSER_NAME,
         request.agent_id,
         PhoneCallType.outbound,
+        cast(str, user.active_org_id),
         db,
     )
     await insert_phone_call_event(
