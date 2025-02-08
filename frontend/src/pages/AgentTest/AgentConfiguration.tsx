@@ -48,6 +48,7 @@ export const extractNewFieldsFromSystemMessage = (
 const CreateNewAgentModal = (props: {
   setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
   setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
+  triggerButtonText: string;
 }) => {
   const authInfo = useAuthInfo();
   const [open, setOpen] = useState(false);
@@ -72,7 +73,7 @@ const CreateNewAgentModal = (props: {
       <DialogTrigger asChild>
         <Button>
           <PlusIcon className="w-4 h-4 mr-2" />
-          New Agent
+          {props.triggerButtonText}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -94,17 +95,6 @@ const CreateNewAgentModal = (props: {
     </Dialog>
   );
 };
-
-interface AgentConfigurationProps {
-  agentId: {
-    baseId: string;
-    versionId: string;
-  } | null;
-  setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
-  agents: Agent[];
-  setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
-  activeAgent?: Agent;
-}
 
 const findPreviousVersion = (
   agents: Agent[],
@@ -142,7 +132,16 @@ const findNextVersion = (
   return currentIndex > 0 ? sameBaseAgents[currentIndex - 1] : null;
 };
 
-export const AgentConfiguration = (props: AgentConfigurationProps) => {
+const BaseAgentConfiguration = (props: {
+  agentId: {
+    baseId: string;
+    versionId: string;
+  } | null;
+  setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
+  agents: Agent[];
+  setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
+  activeAgent?: Agent;
+}) => {
   const authInfo = useAuthInfo();
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
@@ -248,6 +247,7 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         <CreateNewAgentModal
           setAgents={props.setAgents}
           setAgentId={props.setAgentId}
+          triggerButtonText="New Agent"
         />
       </div>
       <div className="flex items-center gap-2">
@@ -432,5 +432,32 @@ export const AgentConfiguration = (props: AgentConfigurationProps) => {
         </div>
       )}
     </div>
+  );
+};
+
+export const AgentConfiguration = (props: {
+  agentId: {
+    baseId: string;
+    versionId: string;
+  } | null;
+  setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
+  agents: Agent[];
+  setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
+  activeAgent?: Agent;
+}) => {
+  return (
+    <>
+      {props.agents.length > 0 ? (
+        <BaseAgentConfiguration {...props} />
+      ) : (
+        <div className="flex items-center justify-center">
+          <CreateNewAgentModal
+            setAgents={props.setAgents}
+            setAgentId={props.setAgentId}
+            triggerButtonText="Create Your First Agent"
+          />
+        </div>
+      )}
+    </>
   );
 };

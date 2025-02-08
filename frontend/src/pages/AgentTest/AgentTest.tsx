@@ -323,7 +323,7 @@ export const AgentTestPage = () => {
           <AgentConfiguration
             agentId={agentId}
             setAgentId={setAgentId}
-            agents={agents}
+            agents={[]}
             setAgents={setAgents}
             activeAgent={activeAgent}
           />
