@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import httpx
 
@@ -9,19 +10,17 @@ logger = logging.getLogger(__name__)
 
 TIMEOUT = 180
 
+model_client = httpx.AsyncClient()
+
 
 async def _core_send_request(
     url: str,
-    headers: dict,
-    request_payload: dict,
+    request_params: dict,
 ) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            url,
-            headers=headers,
-            json=request_payload,
-            timeout=httpx.Timeout(TIMEOUT),
-        )
+    response = await model_client.post(
+        url,
+        **request_params,
+    )
     if response.status_code != 200:
         response_body = await response.aread()
         response_text = response_body.decode()
@@ -34,12 +33,24 @@ async def _core_send_request(
 async def send_openai_request(
     request_payload: dict,
     route: str,
+    files: Optional[dict] = None,
+    data: Optional[dict] = None,
+    timeout: int = TIMEOUT,
 ) -> dict:
     url = f"https://api.openai.com/v1/{route}"
-    headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+    request_params = {
+        "headers": {"Authorization": f"Bearer {settings.openai_api_key}"},
+        "timeout": httpx.Timeout(timeout),
+    }
+    if request_payload:
+        request_params["json"] = request_payload
+    if files:
+        request_params["files"] = files
+    if data:
+        request_params["data"] = data
+
     response_output = await _core_send_request(
         url,
-        headers,
-        request_payload,
+        request_params,
     )
     return response_output
