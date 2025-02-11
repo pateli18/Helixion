@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from svix.webhooks import Webhook, WebhookVerificationError
 
 from src.db.api import (
+    get_user,
     insert_organization,
     insert_user,
     update_user_organization,
@@ -45,11 +46,17 @@ async def webhook(
     db: async_scoped_session = Depends(get_session),
 ):
     if payload["event_type"] == "user.created":
-        await insert_user(
-            payload["user_id"],
-            payload["email"],
-            db,
-        )
+        user_model = await get_user(payload["user_id"], db)
+        if user_model is None:
+            await insert_user(
+                payload["user_id"],
+                payload["email"],
+                db,
+            )
+        else:
+            logger.warning(
+                "User already exists in the database",
+            )
     elif payload["event_type"] == "user.added_to_org":
         await update_user_organization(
             payload["user_id"],

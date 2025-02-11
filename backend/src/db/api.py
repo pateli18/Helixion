@@ -297,3 +297,10 @@ async def make_agent_active(
         .where(AgentModel.id == version_id)
         .values(active=True)
     )
+
+
+async def get_user(
+    user_id: SerializedUUID, db: async_scoped_session
+) -> Optional[UserModel]:
+    result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    return result.scalar_one_or_none()
