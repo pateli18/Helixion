@@ -198,50 +198,54 @@ const Dialer = (props: {
           </Button>
         </div>
       )}
-      <div className="flex items-center gap-2">
-        <div className="text-md text-gray-500">Enter Details</div>
-        <Badge
-          variant="secondary"
-          onClick={handleGetSampleValues}
-          className="cursor-pointer hover:bg-gray-200"
-        >
-          Auto-Populate
-          {sampleDetailsLoading && (
-            <ReloadIcon className="ml-2 w-2 h-2 animate-spin" />
+      {Object.keys(props.activeAgent?.sample_values ?? {}).length > 0 && (
+        <>
+          <div className="flex items-center gap-2">
+            <div className="text-md text-gray-500">Enter Details</div>
+            <Badge
+              variant="secondary"
+              onClick={handleGetSampleValues}
+              className="cursor-pointer hover:bg-gray-200"
+            >
+              Auto-Populate
+              {sampleDetailsLoading && (
+                <ReloadIcon className="ml-2 w-2 h-2 animate-spin" />
+              )}
+            </Badge>
+            <Badge
+              variant="secondary"
+              onClick={handleClearValues}
+              className="cursor-pointer hover:bg-gray-200"
+            >
+              Clear
+            </Badge>
+          </div>
+          {Object.entries(props.activeAgent.sample_values).map(
+            ([key, value]) => (
+              <SampleField
+                key={key}
+                name={key}
+                value={value}
+                setValue={(newValue) => {
+                  props.setAgents((prev) => {
+                    const newAgents = [...prev];
+                    const agentIndex = newAgents.findIndex(
+                      (agent) => agent.id === props.activeAgent.id
+                    );
+                    newAgents[agentIndex] = {
+                      ...props.activeAgent,
+                      sample_values: {
+                        ...props.activeAgent.sample_values,
+                        [key]: newValue,
+                      },
+                    };
+                    return newAgents;
+                  });
+                }}
+              />
+            )
           )}
-        </Badge>
-        <Badge
-          variant="secondary"
-          onClick={handleClearValues}
-          className="cursor-pointer hover:bg-gray-200"
-        >
-          Clear
-        </Badge>
-      </div>
-      {Object.entries(props.activeAgent?.sample_values ?? {}).map(
-        ([key, value]) => (
-          <SampleField
-            key={key}
-            name={key}
-            value={value}
-            setValue={(newValue) => {
-              props.setAgents((prev) => {
-                const newAgents = [...prev];
-                const agentIndex = newAgents.findIndex(
-                  (agent) => agent.id === props.activeAgent.id
-                );
-                newAgents[agentIndex] = {
-                  ...props.activeAgent,
-                  sample_values: {
-                    ...props.activeAgent.sample_values,
-                    [key]: newValue,
-                  },
-                };
-                return newAgents;
-              });
-            }}
-          />
-        )
+        </>
       )}
       {phoneCallId === null && (
         <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
