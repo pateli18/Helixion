@@ -32,21 +32,23 @@ const OrganizationSwitcher = () => {
           <DropdownMenuLabel className="text-muted-foreground font-normal">
             Switch Organization
           </DropdownMenuLabel>
-          {orgs.map((org) => (
-            <DropdownMenuItem
-              key={org.orgId}
-              onClick={() => {
-                setActiveOrgId(org.orgId);
-                window.location.reload();
-              }}
-              className={cn(
-                activeOrgId === org.orgId &&
-                  "bg-sidebar-accent text-sidebar-accent-foreground"
-              )}
-            >
-              {org.orgName}
-            </DropdownMenuItem>
-          ))}
+          {orgs
+            .sort((a, b) => a.orgName.localeCompare(b.orgName))
+            .map((org) => (
+              <DropdownMenuItem
+                key={org.orgId}
+                onClick={() => {
+                  setActiveOrgId(org.orgId);
+                  window.location.reload();
+                }}
+                className={cn(
+                  activeOrgId === org.orgId &&
+                    "bg-sidebar-accent text-sidebar-accent-foreground"
+                )}
+              >
+                {org.orgName}
+              </DropdownMenuItem>
+            ))}
           <DropdownMenuSeparator />
         </>
       )}
