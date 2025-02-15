@@ -73,6 +73,22 @@ enter_keypad_tool = {
     },
 }
 
+text_message_tool = {
+    "type": "function",
+    "name": "send_text_message",
+    "description": "Send a text message",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "body": {
+                "type": "string",
+                "description": "The body of the text message",
+            },
+        },
+        "required": ["body"],
+    },
+}
+
 
 def transfer_call_tool(
     transfer_call_numbers: list[TransferCallNumber],

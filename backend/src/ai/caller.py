@@ -30,6 +30,7 @@ from src.ai.prompts import (
     enter_keypad_tool,
     hang_up_tools,
     query_documents_tool,
+    text_message_tool,
     transfer_call_tool,
 )
 from src.audio.data_processing import audio_bytes_to_ms
@@ -64,6 +65,7 @@ class ToolNames(str, Enum):
     query_documents = "query_documents"
     enter_keypad = "enter_keypad"
     transfer_call = "transfer_call"
+    send_text_message = "send_text_message"
 
 
 class AiSessionConfiguration(BaseModel):
@@ -98,6 +100,8 @@ class AiSessionConfiguration(BaseModel):
                     tool_configuration[ToolNames.transfer_call.value]
                 )
             )
+        if tool_configuration.get(ToolNames.send_text_message.value, False):
+            tools.append(text_message_tool)
 
         return cls(
             turn_detection=TurnDetection(),

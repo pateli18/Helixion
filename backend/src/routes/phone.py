@@ -306,12 +306,8 @@ async def call_stream(
         call_router = CallRouter(
             agent_id=phone_call.agent.id,
             organization_id=cast(str, phone_call.organization_id),
-            agent_phone_number=(
-                cast(str, phone_call.from_phone_number)
-                if cast(PhoneCallType, phone_call.call_type)
-                == PhoneCallType.outbound
-                else cast(str, phone_call.to_phone_number)
-            ),
+            from_phone_number=cast(str, phone_call.from_phone_number),
+            to_phone_number=cast(str, phone_call.to_phone_number),
             call_sid=cast(str, phone_call.call_sid),
             ai_caller=ai,
             call_type=cast(PhoneCallType, phone_call.call_type),

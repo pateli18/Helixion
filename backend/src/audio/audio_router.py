@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 class CallRouter:
     agent_id: SerializedUUID
     organization_id: str
-    agent_phone_number: str
+    from_phone_number: str
+    to_phone_number: str
     stream_sid: Union[str, None]
     last_ai_item_id: Union[str, None]
     mark_queue: list[int]
@@ -47,14 +48,16 @@ class CallRouter:
         self,
         agent_id: SerializedUUID,
         organization_id: str,
-        agent_phone_number: str,
+        from_phone_number: str,
+        to_phone_number: str,
         call_sid: str,
         ai_caller: AiCaller,
         call_type: PhoneCallType,
     ):
         self.agent_id = agent_id
         self.organization_id = organization_id
-        self.agent_phone_number = agent_phone_number
+        self.from_phone_number = from_phone_number
+        self.to_phone_number = to_phone_number
         self.call_sid = call_sid
         self.stream_sid = None
         self.last_ai_item_id = None
@@ -85,22 +88,31 @@ class CallRouter:
                     db,
                 )
 
-    async def _send_text_message(
-        self, to_phone_number: str, body: str
-    ) -> None:
+    async def _send_text_message(self, body: str) -> None:
         message_id = str(uuid.uuid4())
+        sending_phone_number = (
+            self.from_phone_number
+            if self.call_type == PhoneCallType.outbound
+            else self.to_phone_number
+        )
+        receiving_phone_number = (
+            self.to_phone_number
+            if self.call_type == PhoneCallType.outbound
+            else self.from_phone_number
+        )
+
         output_sid = send_text_message(
-            to_phone_number,
+            receiving_phone_number,
             body,
-            self.agent_phone_number,
+            sending_phone_number,
             f"https://{settings.host}/api/v1/phone/webhook/message-status/{message_id}",
         )
         if output_sid is not None:
             async with async_session_scope() as db:
                 await insert_text_message(
                     self.agent_id,
-                    self.agent_phone_number,
-                    to_phone_number,
+                    sending_phone_number,
+                    receiving_phone_number,
                     body,
                     TextMessageType.outbound,
                     output_sid,
@@ -164,7 +176,6 @@ class CallRouter:
                     elif message["name"] == "send_text_message":
                         arguments = json.loads(message["arguments"])
                         await self._send_text_message(
-                            arguments["to_phone_number"],
                             arguments["body"],
                         )
                     elif message["name"] == "transfer_call":
