@@ -100,6 +100,9 @@ class CallRouter:
                                 PhoneCallEndReason.end_of_call_bot
                             )
                             logger.info("Hang up requested by bot")
+                    elif message["name"] == "cancel_hang_up":
+                        self._hang_up_reason = None
+                        logger.info("Hang up cancelled")
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]
@@ -284,7 +287,9 @@ class BrowserRouter:
                                 PhoneCallEndReason.end_of_call_bot
                             )
                             logger.info("Hang up requested by bot")
-
+                    elif message["name"] == "cancel_hang_up":
+                        self._hang_up_reason = None
+                        logger.info("Hang up cancelled")
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]

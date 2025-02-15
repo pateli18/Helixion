@@ -28,7 +28,7 @@ from pydantic.json import pydantic_encoder
 
 from src.ai.prompts import (
     enter_keypad_tool,
-    hang_up_tool,
+    hang_up_tools,
     query_documents_tool,
 )
 from src.audio.data_processing import audio_bytes_to_ms
@@ -83,9 +83,9 @@ class AiSessionConfiguration(BaseModel):
     ) -> "AiSessionConfiguration":
         system_message = system_prompt.format(**user_info)
 
-        tools = []
+        tools: list[dict] = []
         if ToolNames.hang_up in tool_names:
-            tools.append(hang_up_tool)
+            tools.extend(hang_up_tools)
         if ToolNames.query_documents in tool_names:
             tools.append(query_documents_tool)
         if ToolNames.enter_keypad in tool_names:

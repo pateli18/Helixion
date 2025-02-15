@@ -14,22 +14,30 @@ sample_values_prompt = """
 """
 
 
-hang_up_tool = {
-    "type": "function",
-    "name": "hang_up",
-    "description": "Hang up the call",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "reason": {
-                "type": "string",
-                "description": "The reason for hanging up the call. `end_of_call` if the call ended naturally, `answering_machine` if the call was answered by an answering machine and you are instructed to not leave a message",
-                "enum": ["end_of_call", "answering_machine"],
+hang_up_tools = [
+    {
+        "type": "function",
+        "name": "hang_up",
+        "description": "Hang up the call",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "description": "The reason for hanging up the call. `end_of_call` if the call ended naturally, `answering_machine` if the call was answered by an answering machine and you are instructed to not leave a message",
+                    "enum": ["end_of_call", "answering_machine"],
+                },
             },
+            "required": ["reason"],
         },
-        "required": ["reason"],
     },
-}
+    {
+        "type": "function",
+        "name": "cancel_hang_up",
+        "description": "Cancel the hang up you previously requested",
+        "parameters": {},
+    },
+]
 
 query_documents_tool = {
     "type": "function",
