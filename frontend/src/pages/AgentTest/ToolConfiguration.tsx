@@ -26,6 +26,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 
 const ToolConfigurationSchema = z.object({
   hang_up: z.boolean(),
@@ -66,6 +68,83 @@ const SwitchField = (props: {
   );
 };
 
+const TransferCallNumbers = (props: {
+  form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
+}) => {
+  const { form } = props;
+  const numbers = form.watch("transfer_call_numbers");
+  const transferEnabled = form.watch("transfer_call");
+
+  const addNumber = () => {
+    form.setValue("transfer_call_numbers", [
+      ...numbers,
+      { phone_number: "", label: "" },
+    ]);
+  };
+
+  const removeNumber = (index: number) => {
+    form.setValue(
+      "transfer_call_numbers",
+      numbers.filter((_, i) => i !== index)
+    );
+  };
+
+  if (!transferEnabled) return null;
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      {numbers.map((_, index) => (
+        <div key={index} className="flex gap-4 items-start">
+          <FormField
+            control={form.control}
+            name={`transfer_call_numbers.${index}.label`}
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormLabel>Label</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Customer Support" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name={`transfer_call_numbers.${index}.phone_number`}
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormLabel>Phone Number</FormLabel>
+                <FormControl>
+                  <Input placeholder="+1234567890" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => removeNumber(index)}
+            className="mt-8"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      <div className="flex justify-center items-center">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addNumber}
+          className="h-8"
+        >
+          <PlusIcon className="h-4 w-4 mr-2" /> Add Number
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const ToolConfigurationForm = (props: {
   successCallback: (toolConfiguration: Record<string, any>) => void;
   existingToolConfiguration: Record<string, any>;
@@ -79,8 +158,8 @@ const ToolConfigurationForm = (props: {
       hang_up: props.existingToolConfiguration.hang_up,
       send_text: props.existingToolConfiguration.send_text ?? false,
       transfer_call:
-        props.existingToolConfiguration.transfer_call &&
-        props.existingToolConfiguration.transfer_call.length > 0
+        props.existingToolConfiguration.transfer_call_numbers &&
+        props.existingToolConfiguration.transfer_call_numbers.length > 0
           ? true
           : false,
       transfer_call_numbers:
@@ -112,34 +191,32 @@ const ToolConfigurationForm = (props: {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
-        <div>
-          <h3 className="mb-4 text-lg font-medium">Email Notifications</h3>
-          <div className="space-y-4">
-            <SwitchField
-              form={form}
-              name="hang_up"
-              label="Hang up"
-              description="The agent can hang up the call"
-            />
-            <SwitchField
-              form={form}
-              name="send_text"
-              label="Send text"
-              description="The agent can send a text message to the caller"
-            />
-            <SwitchField
-              form={form}
-              name="enter_keypad"
-              label="Enter keypad"
-              description="The agent can enter numbers on the phone keypad"
-            />
-            <SwitchField
-              form={form}
-              name="transfer_call"
-              label="Transfer call"
-              description="The agent can transfer the call to other numbers"
-            />
-          </div>
+        <div className="space-y-4">
+          <SwitchField
+            form={form}
+            name="hang_up"
+            label="Hang up"
+            description="The agent can hang up the call"
+          />
+          <SwitchField
+            form={form}
+            name="send_text"
+            label="Send text"
+            description="The agent can send a text message to the caller"
+          />
+          <SwitchField
+            form={form}
+            name="enter_keypad"
+            label="Enter keypad"
+            description="The agent can enter numbers on the phone keypad"
+          />
+          <SwitchField
+            form={form}
+            name="transfer_call"
+            label="Transfer call"
+            description="The agent can transfer the call to other numbers"
+          />
+          <TransferCallNumbers form={form} />
         </div>
         <Button disabled={submitLoading} type="submit">
           Update{" "}
@@ -199,8 +276,8 @@ export const ToolConfigurationView = (props: {
       {props.existingToolConfiguration.send_text && (
         <ToolBadge label="Send text" />
       )}
-      {props.existingToolConfiguration.transfer_call &&
-        props.existingToolConfiguration.transfer_call.length > 0 && (
+      {props.existingToolConfiguration.transfer_call_numbers &&
+        props.existingToolConfiguration.transfer_call_numbers.length > 0 && (
           <ToolBadge label="Transfer call" />
         )}
       {props.existingToolConfiguration.enter_keypad && (

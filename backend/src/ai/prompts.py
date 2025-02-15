@@ -1,5 +1,3 @@
-from src.helixion_types import TransferCallNumber
-
 default_system_prompt = """- You are a helpful, witty, and friendly AI.
 - Act like a human, but remember that you aren't a human and that you can't do human things in the real world.
 - Your voice and personality should be warm and engaging, with a lively and playful tone.
@@ -91,7 +89,7 @@ text_message_tool = {
 
 
 def transfer_call_tool(
-    transfer_call_numbers: list[TransferCallNumber],
+    transfer_call_numbers: list[dict[str, str]],
 ) -> dict:
     return {
         "type": "function",
@@ -103,7 +101,7 @@ def transfer_call_tool(
                 "phone_number_label": {
                     "type": "string",
                     "description": "The label of the phone number to transfer the call to",
-                    "enum": [item.label for item in transfer_call_numbers],
+                    "enum": [item["label"] for item in transfer_call_numbers],
                 },
             },
             "required": ["phone_number_label"],
