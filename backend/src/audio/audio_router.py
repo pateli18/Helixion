@@ -22,7 +22,11 @@ from src.helixion_types import (
     TextMessageType,
 )
 from src.settings import settings
-from src.twilio_utils import hang_up_phone_call, send_text_message
+from src.twilio_utils import (
+    hang_up_phone_call,
+    send_text_message,
+    transfer_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +109,25 @@ class CallRouter:
                     db,
                 )
 
+    async def _transfer_call(self, phone_number_label: str) -> None:
+        transfer_call_number: Optional[str] = next(
+            (
+                item["phone_number"]
+                for item in self.ai_caller.tool_configuration[
+                    "transfer_call_numbers"
+                ]
+                if item["label"] == phone_number_label
+            ),
+            None,
+        )
+        if transfer_call_number is None:
+            logger.warning(
+                f"Transfer call number not found: {phone_number_label}, call will not be transferred"
+            )
+        else:
+            self._hang_up_reason = PhoneCallEndReason.transferred
+            transfer_call(self.call_sid, transfer_call_number)
+
     async def send_to_human(self, websocket: WebSocket):
         try:
             async for message in self.ai_caller:
@@ -143,6 +166,11 @@ class CallRouter:
                         await self._send_text_message(
                             arguments["to_phone_number"],
                             arguments["body"],
+                        )
+                    elif message["name"] == "transfer_call":
+                        arguments = json.loads(message["arguments"])
+                        await self._transfer_call(
+                            arguments["phone_number_label"]
                         )
                     else:
                         logger.warning(

@@ -213,6 +213,7 @@ class PhoneCallStatus(str, Enum):
     failed = "failed"
     no_answer = "no-answer"
     initiated = "initiated"
+    transferred = "transferred"
 
 
 TERMINAL_PHONE_CALL_STATUSES = [
@@ -250,6 +251,7 @@ class PhoneCallEndReason(str, Enum):
     user_hangup = "user_hangup"
     unknown = "unknown"
     listener_hangup = "listener_hangup"
+    transferred = "transferred"
 
 
 class PhoneCallMetadata(BaseModel):
@@ -334,3 +336,8 @@ class AnalyticsGroup(BaseModel):
     name: str
     tags: list[AnalyticsTag]
     reports: list[AnalyticsReport]
+
+
+class TransferCallNumber(BaseModel):
+    phone_number: str
+    label: str

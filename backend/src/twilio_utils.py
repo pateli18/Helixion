@@ -17,6 +17,12 @@ def hang_up_phone_call(call_sid: str):
     twilio_client.calls(call_sid).update(status="completed")
 
 
+def transfer_call(call_sid: str, to_phone_number: str):
+    twilio_client.calls(call_sid).update(
+        twiml=f"<Response><Dial><Number>{to_phone_number}</Number></Dial></Response>",
+    )
+
+
 def send_text_message(
     to_phone_number: str,
     body: str,

@@ -30,6 +30,7 @@ from src.ai.prompts import (
     enter_keypad_tool,
     hang_up_tools,
     query_documents_tool,
+    transfer_call_tool,
 )
 from src.audio.data_processing import audio_bytes_to_ms
 from src.aws_utils import S3Client
@@ -62,6 +63,7 @@ class ToolNames(str, Enum):
     hang_up = "hang_up"
     query_documents = "query_documents"
     enter_keypad = "enter_keypad"
+    transfer_call = "transfer_call"
 
 
 class AiSessionConfiguration(BaseModel):
@@ -84,12 +86,18 @@ class AiSessionConfiguration(BaseModel):
         system_message = system_prompt.format(**user_info)
 
         tools: list[dict] = []
-        if ToolNames.hang_up.value in tool_configuration:
+        if tool_configuration.get(ToolNames.hang_up.value, False):
             tools.extend(hang_up_tools)
-        if ToolNames.query_documents.value in tool_configuration:
+        if tool_configuration.get(ToolNames.query_documents.value, False):
             tools.append(query_documents_tool)
-        if ToolNames.enter_keypad.value in tool_configuration:
+        if tool_configuration.get(ToolNames.enter_keypad.value, False):
             tools.append(enter_keypad_tool)
+        if len(tool_configuration.get(ToolNames.transfer_call.value, [])) > 0:
+            tools.append(
+                transfer_call_tool(
+                    tool_configuration[ToolNames.transfer_call.value]
+                )
+            )
 
         return cls(
             turn_detection=TurnDetection(),
@@ -190,15 +198,15 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self._audio_format = audio_format
 
         self.documents = documents or []
+        self.tool_configuration = tool_configuration or {}
 
-        tool_configuration = tool_configuration or {}
         if len(self.documents) > 0:
-            tool_configuration["query_documents"] = {}
+            self.tool_configuration["query_documents"] = {}
         self.session_configuration = AiSessionConfiguration.create(
             system_prompt,
             user_info,
             self._audio_format,
-            tool_configuration,
+            self.tool_configuration,
         )
         self._sampling_rate = 24000 if self._audio_format == "pcm16" else 8000
         self._bytes_per_sample = 2 if self._audio_format == "pcm16" else 1

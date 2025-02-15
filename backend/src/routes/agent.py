@@ -22,7 +22,12 @@ from src.db.api import (
 )
 from src.db.base import get_session
 from src.db.converter import convert_agent_model
-from src.helixion_types import Agent, AgentBase, SerializedUUID
+from src.helixion_types import (
+    Agent,
+    AgentBase,
+    SerializedUUID,
+    TransferCallNumber,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,11 +117,6 @@ async def create_agent(
     response = convert_agent_model(new_agent_model)
     await db.commit()
     return response
-
-
-class TransferCallNumber(BaseModel):
-    phone_number: str
-    label: str
 
 
 class UpdateToolConfigurationRequest(BaseModel):
