@@ -372,6 +372,13 @@ export const BrowserCallDisplay = (props: {
           );
         } else if (data.event === "speaker_segments") {
           setSpeakerSegments(data.payload);
+        } else if (data.event === "message") {
+          toast.info(
+            <div className="space-y-1">
+              <div className="font-bold text-sm">{data.payload.title}</div>
+              <div className="text-sm">{data.payload.body}</div>
+            </div>
+          );
         }
       } catch (err) {
         console.error("Error processing server event:", err);
