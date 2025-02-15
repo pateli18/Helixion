@@ -24,12 +24,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.twiml.voice_response import Connect, VoiceResponse
 
 from src.ai.caller import AiCaller, AiMessage, AiMessageQueue
-from src.audio.audio_router import (
-    CallRouter,
-    hang_up_phone_call,
-    twilio_client,
-    twilio_request_validator,
-)
+from src.audio.audio_router import CallRouter
 from src.audio.data_processing import (
     calculate_bar_heights,
     pcm_to_wav_buffer,
@@ -46,6 +41,8 @@ from src.db.api import (
     get_phone_calls,
     insert_phone_call,
     insert_phone_call_event,
+    insert_text_message,
+    insert_text_message_event,
     update_phone_call,
 )
 from src.db.base import get_session
@@ -63,8 +60,14 @@ from src.helixion_types import (
     SerializedUUID,
     Speaker,
     SpeakerSegment,
+    TextMessageType,
 )
 from src.settings import settings
+from src.twilio_utils import (
+    hang_up_phone_call,
+    twilio_client,
+    twilio_request_validator,
+)
 
 call_messages: dict[SerializedUUID, AiMessageQueue] = {}
 
@@ -104,8 +107,8 @@ class OutboundCallResponse(BaseModel):
     phone_call_id: SerializedUUID
 
 
-@router.post("/webhook/status/{phone_call_id}", status_code=204)
-async def status_webhook(
+@router.post("/webhook/call-status/{phone_call_id}", status_code=204)
+async def call_status_webhook(
     phone_call_id: SerializedUUID,
     payload: dict = Depends(_validate_twilio_request),
     db: async_scoped_session = Depends(get_session),
@@ -120,6 +123,46 @@ async def status_webhook(
     ):
         call_messages[phone_call_id].end_call()
 
+    return Response(status_code=204)
+
+
+@router.post(
+    "/webhook/text-message-status/{text_message_sid}", status_code=204
+)
+async def text_message_status_webhook(
+    text_message_sid: SerializedUUID,
+    payload: dict = Depends(_validate_twilio_request),
+    db: async_scoped_session = Depends(get_session),
+):
+    await insert_text_message_event(text_message_sid, payload, db)
+    await db.commit()
+    return Response(status_code=204)
+
+
+@router.post(
+    "/inbound-message",
+    status_code=204,
+)
+async def inbound_message(
+    payload: dict = Depends(_validate_twilio_request),
+    db: async_scoped_session = Depends(get_session),
+):
+    to_number = payload["To"]
+    agent = await get_agent_by_incoming_phone_number(to_number, db)
+    if agent is None:
+        logger.exception(f"Agent not found for phone number {to_number}")
+        return Response(status_code=204)
+    await insert_text_message(
+        cast(SerializedUUID, agent.id),
+        cast(str, agent.incoming_phone_number),
+        to_number,
+        payload["Body"],
+        TextMessageType.inbound,
+        payload["MessageSid"],
+        "texter",
+        cast(str, agent.organization_id),
+        db,
+    )
     return Response(status_code=204)
 
 
@@ -167,7 +210,7 @@ async def inbound_call(
         connect = Connect()
         connect.stream(
             url=f"wss://{settings.host}/api/v1/phone/call-stream/{phone_call_id}",
-            status_callback=f"https://{settings.host}/api/v1/phone/webhook/status/{phone_call_id}",
+            status_callback=f"https://{settings.host}/api/v1/phone/webhook/call-status/{phone_call_id}",
             status_callback_event=[
                 "initiated",
                 "ringing",
@@ -199,7 +242,7 @@ async def outbound_call(
         to=request.phone_number,
         from_=from_phone_number,
         twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/call-stream/{phone_call_id}" /></Connect></Response>',
-        status_callback=f"https://{settings.host}/api/v1/phone/webhook/status/{phone_call_id}",
+        status_callback=f"https://{settings.host}/api/v1/phone/webhook/call-status/{phone_call_id}",
         status_callback_event=[
             "initiated",
             "ringing",
@@ -261,9 +304,17 @@ async def call_stream(
     ) as ai:
         ai.attach_queue(call_messages[phone_call_id])
         call_router = CallRouter(
-            cast(str, phone_call.call_sid),
-            ai,
-            cast(PhoneCallType, phone_call.call_type),
+            agent_id=phone_call.agent.id,
+            organization_id=cast(str, phone_call.organization_id),
+            agent_phone_number=(
+                cast(str, phone_call.from_phone_number)
+                if cast(PhoneCallType, phone_call.call_type)
+                == PhoneCallType.outbound
+                else cast(str, phone_call.to_phone_number)
+            ),
+            call_sid=cast(str, phone_call.call_sid),
+            ai_caller=ai,
+            call_type=cast(PhoneCallType, phone_call.call_type),
         )
         await asyncio.gather(
             call_router.receive_from_human_call(websocket),

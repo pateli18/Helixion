@@ -27,6 +27,7 @@ class AgentModel(Base, TimestampMixin):
     )
 
     phone_calls = relationship("PhoneCallModel", back_populates="agent")
+    text_messages = relationship("TextMessageModel", back_populates="agent")
     documents = relationship(
         "AgentDocumentModel",
         back_populates="agents",

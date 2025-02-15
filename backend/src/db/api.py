@@ -14,6 +14,8 @@ from src.db.models import (
     OrganizationModel,
     PhoneCallEventModel,
     PhoneCallModel,
+    TextMessageEventModel,
+    TextMessageModel,
     UserModel,
 )
 from src.helixion_types import (
@@ -21,6 +23,7 @@ from src.helixion_types import (
     PhoneCallEndReason,
     PhoneCallType,
     SerializedUUID,
+    TextMessageType,
 )
 
 logger = logging.getLogger(__name__)
@@ -315,4 +318,41 @@ async def update_agent_tool_configuration(
         update(AgentModel)
         .where(AgentModel.id == agent_id)
         .values(tool_configuration=tool_configuration)
+    )
+
+
+async def insert_text_message_event(
+    text_message_id: SerializedUUID,
+    payload: dict,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        insert(TextMessageEventModel).values(
+            text_message_id=text_message_id, payload=payload
+        )
+    )
+
+
+async def insert_text_message(
+    agent_id: SerializedUUID,
+    from_phone_number: str,
+    to_phone_number: str,
+    body: str,
+    message_type: TextMessageType,
+    message_sid: str,
+    initiator: Optional[str],
+    organization_id: str,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        insert(TextMessageModel).values(
+            agent_id=agent_id,
+            from_phone_number=from_phone_number,
+            to_phone_number=to_phone_number,
+            body=body,
+            message_type=message_type.value,
+            message_sid=message_sid,
+            initiator=initiator,
+            organization_id=organization_id,
+        )
     )

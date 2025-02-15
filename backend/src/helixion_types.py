@@ -239,6 +239,11 @@ class PhoneCallType(str, Enum):
     outbound = "outbound"
 
 
+class TextMessageType(str, Enum):
+    inbound = "inbound"
+    outbound = "outbound"
+
+
 class PhoneCallEndReason(str, Enum):
     end_of_call_bot = "end_of_call_bot"
     voice_mail_bot = "voice_mail_bot"

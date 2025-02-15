@@ -5,6 +5,7 @@ from .Analytics import (
     AnalyticsTagModel,
 )
 from .PhoneCall import PhoneCallEventModel, PhoneCallModel
+from .TextMessage import TextMessageEventModel, TextMessageModel
 from .User import OrganizationModel, UserModel
 
 __all__ = [
@@ -18,4 +19,6 @@ __all__ = [
     "AnalyticsReportModel",
     "AnalyticsTagGroupModel",
     "AnalyticsTagModel",
+    "TextMessageEventModel",
+    "TextMessageModel",
 ]

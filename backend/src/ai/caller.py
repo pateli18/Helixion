@@ -204,7 +204,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self._bytes_per_sample = 2 if self._audio_format == "pcm16" else 1
         self._log_tasks: list[asyncio.Task] = []
         self._cleanup_started = False
-        self._phone_call_id = phone_call_id
+        self.phone_call_id = phone_call_id
         self._audio_input_buffer_ms: int = (
             self.session_configuration.turn_detection.prefix_padding_ms
             if self.session_configuration.turn_detection
@@ -231,7 +231,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             )
         )
         await self.initialize_session()
-        self._log_file = f"logs/{self._phone_call_id}.log"
+        self._log_file = f"logs/{self.phone_call_id}.log"
         logger.info(f"Initialized session with {self._log_file=}")
         return self
 
@@ -471,7 +471,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
     ) -> tuple[SerializedUUID, int]:
         if self._cleanup_started:
             logger.info("Cleanup already started")
-            return self._phone_call_id, self._audio_total_buffer_ms
+            return self.phone_call_id, self._audio_total_buffer_ms
         self._cleanup_started = True
 
         if self._ws_client is not None:
@@ -501,14 +501,14 @@ class AiCaller(AsyncContextManager["AiCaller"]):
             zip_data = zip_buffer.getvalue()
 
             # Upload zipped file
-            s3_filepath = f"s3://clinicontact/logs/{self._phone_call_id}.zip"
+            s3_filepath = f"s3://clinicontact/logs/{self.phone_call_id}.zip"
             await s3_client.upload_file(
                 zip_data, s3_filepath, "application/zip"
             )
 
         async with async_session_scope() as db:
             await update_phone_call(
-                self._phone_call_id,
+                self.phone_call_id,
                 s3_filepath,
                 phone_call_end_reason,
                 db,
@@ -517,7 +517,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         os.remove(self.log_file)
         self._log_tasks.clear()
         self._log_file = None
-        return self._phone_call_id, self._audio_total_buffer_ms
+        return self.phone_call_id, self._audio_total_buffer_ms
 
     async def __aiter__(self) -> AsyncIterator[dict]:
         while True:
