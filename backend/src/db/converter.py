@@ -1,9 +1,15 @@
 from typing import Optional, cast
 
-from src.db.models import AgentModel, AnalyticsTagGroupModel, PhoneCallModel
+from src.db.models import (
+    AgentModel,
+    AgentPhoneNumberModel,
+    AnalyticsTagGroupModel,
+    PhoneCallModel,
+)
 from src.helixion_types import (
     Agent,
     AgentMetadata,
+    AgentPhoneNumber,
     AnalyticsGroup,
     AnalyticsReport,
     AnalyticsTag,
@@ -67,6 +73,16 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
     )
 
 
+def convert_agent_phone_number(
+    agent_phone_number: AgentPhoneNumberModel,
+) -> AgentPhoneNumber:
+    return AgentPhoneNumber(
+        id=cast(SerializedUUID, agent_phone_number.id),
+        phone_number=cast(str, agent_phone_number.phone_number),
+        incoming=cast(bool, agent_phone_number.incoming),
+    )
+
+
 def convert_agent_model(agent: AgentModel) -> Agent:
     return Agent(
         base_id=cast(SerializedUUID, agent.base_id),
@@ -83,10 +99,12 @@ def convert_agent_model(agent: AgentModel) -> Agent:
             for document in agent.documents
         ],
         sample_values=cast(Optional[dict], agent.sample_values) or {},
-        incoming_phone_number=cast(Optional[str], agent.incoming_phone_number),
         user_email=cast(str, agent.user.email),
         tool_configuration=cast(Optional[dict], agent.tool_configuration)
         or {},
+        phone_numbers=[
+            convert_agent_phone_number(item) for item in agent.phone_numbers
+        ],
     )
 
 

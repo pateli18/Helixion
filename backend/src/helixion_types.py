@@ -292,8 +292,13 @@ class AgentBase(BaseModel):
     base_id: SerializedUUID
     active: bool
     sample_values: dict
-    incoming_phone_number: Optional[str]
     tool_configuration: dict
+
+
+class AgentPhoneNumber(BaseModel):
+    id: SerializedUUID
+    phone_number: str
+    incoming: bool
 
 
 class Agent(AgentBase):
@@ -304,6 +309,7 @@ class Agent(AgentBase):
     document_metadata: list[DocumentMetadata]
     test_values: Optional[dict] = None
     user_email: str
+    phone_numbers: list[AgentPhoneNumber]
 
 
 class AiMessageEventTypes(str, Enum):

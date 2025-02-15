@@ -1,5 +1,5 @@
 import logging
-from typing import Union, cast
+from typing import cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -106,7 +106,6 @@ async def create_agent(
             base_id=base_id,
             active=True,
             sample_values={},
-            incoming_phone_number=None,
             tool_configuration={"hang_up": True},
         ),
         user.user_id,
@@ -210,9 +209,6 @@ async def update_instructions_from_report(
             base_id=base_id,
             active=False,
             sample_values=cast(dict, agent.sample_values),
-            incoming_phone_number=cast(
-                Union[str, None], agent.incoming_phone_number
-            ),
             tool_configuration=cast(dict, agent.tool_configuration),
         ),
         user.user_id,

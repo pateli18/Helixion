@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from src.db.models import (
     AgentDocumentModel,
     AgentModel,
+    AgentPhoneNumberModel,
     AnalyticsReportModel,
     AnalyticsTagGroupModel,
     DocumentModel,
@@ -165,6 +166,7 @@ def _base_agent_query() -> Select:
                 DocumentModel.name,  # type: ignore
             )
         )
+        .options(selectinload(AgentModel.phone_numbers))
         .options(selectinload(AgentModel.user))
     )
 
@@ -183,7 +185,9 @@ async def get_agent_by_incoming_phone_number(
 ) -> Optional[AgentModel]:
     query = _base_agent_query()
     result = await db.execute(
-        query.where(AgentModel.incoming_phone_number == incoming_phone_number)
+        query.join(AgentPhoneNumberModel)
+        .where(AgentPhoneNumberModel.phone_number == incoming_phone_number)
+        .where(AgentPhoneNumberModel.incoming == True)  # noqa E712
     )
     return result.scalar_one_or_none()
 

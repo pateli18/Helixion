@@ -19,7 +19,6 @@ class AgentModel(Base, TimestampMixin):
     base_id = Column(UUID(as_uuid=True), nullable=False)
     active = Column(Boolean, nullable=False)
     sample_values = Column(JSONB, nullable=True)
-    incoming_phone_number = Column(VARCHAR, nullable=True)
     tool_configuration = Column(JSONB, nullable=True)
     user_id = Column(VARCHAR, ForeignKey("user.id"), nullable=False)
     organization_id = Column(
@@ -86,9 +85,10 @@ class AgentPhoneNumberModel(Base, TimestampMixin):
     )
     base_agent_id = Column(UUID(as_uuid=True), nullable=False)
     phone_number = Column(VARCHAR, nullable=False)
+    incoming = Column(Boolean, nullable=False)
 
     agents = relationship(
         "AgentModel",
-        back_populates="documents",
+        back_populates="phone_numbers",
         primaryjoin="foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id",
     )

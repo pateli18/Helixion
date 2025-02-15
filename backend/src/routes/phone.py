@@ -4,8 +4,9 @@ import base64
 import io
 import json
 import logging
+import random
 import zipfile
-from typing import AsyncGenerator, cast
+from typing import AsyncGenerator, Optional, cast
 from uuid import uuid4
 
 import librosa
@@ -35,6 +36,7 @@ from src.auth import User, require_user
 from src.aws_utils import S3Client
 from src.db.api import (
     check_organization_owns_agent,
+    get_agent,
     get_agent_by_incoming_phone_number,
     get_agent_documents,
     get_phone_call,
@@ -46,7 +48,11 @@ from src.db.api import (
     update_phone_call,
 )
 from src.db.base import get_session
-from src.db.converter import convert_phone_call_model, latest_phone_call_event
+from src.db.converter import (
+    convert_agent_phone_number,
+    convert_phone_call_model,
+    latest_phone_call_event,
+)
 from src.helixion_types import (
     BROWSER_NAME,
     TERMINAL_PHONE_CALL_STATUSES,
@@ -101,6 +107,7 @@ class OutboundCallRequest(BaseModel):
     phone_number: str
     user_info: dict
     agent_id: SerializedUUID
+    outbound_phone_number_id: Optional[SerializedUUID] = None
 
 
 class OutboundCallResponse(BaseModel):
@@ -231,13 +238,30 @@ async def outbound_call(
     user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ) -> OutboundCallResponse:
-    if not await check_organization_owns_agent(
-        request.agent_id, cast(str, user.active_org_id), db
-    ):
+    agent_model = await get_agent(request.agent_id, db)
+    if agent_model is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if cast(str, agent_model.organization_id) != user.active_org_id:
         raise HTTPException(status_code=403, detail="Agent not found")
 
+    agent_phone_numbers = [
+        convert_agent_phone_number(item) for item in agent_model.phone_numbers
+    ]
+    if request.outbound_phone_number_id is not None:
+        matching_phone_numbers = [
+            item
+            for item in agent_phone_numbers
+            if item.id == request.outbound_phone_number_id
+        ]
+        if len(matching_phone_numbers) == 0:
+            raise HTTPException(
+                status_code=404, detail="Outbound phone number not found"
+            )
+        from_phone_number = matching_phone_numbers[0].phone_number
+    else:
+        from_phone_number = random.choice(agent_phone_numbers).phone_number
+
     phone_call_id = uuid4()
-    from_phone_number = "+13305787677"
     call = twilio_client.calls.create(
         to=request.phone_number,
         from_=from_phone_number,
