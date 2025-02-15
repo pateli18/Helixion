@@ -8,6 +8,7 @@ import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { CallHistoryPage } from "./pages/CallHistory/CallHistory";
 import { CallAnalyticsPage } from "./pages/CallAnalytics/CallAnalytics";
+import { UserProvider } from "./contexts/UserContext";
 const container = document.getElementById("root");
 const root = createRoot(container!);
 
@@ -16,11 +17,13 @@ export const App = () => {
     <ServicesProviderWrapper>
       <TooltipProvider delayDuration={0}>
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<AgentTestPage />} />
-            <Route path="/call-history" element={<CallHistoryPage />} />
-            <Route path="/call-analytics" element={<CallAnalyticsPage />} />
-          </Routes>
+          <UserProvider>
+            <Routes>
+              <Route path="/" element={<AgentTestPage />} />
+              <Route path="/call-history" element={<CallHistoryPage />} />
+              <Route path="/call-analytics" element={<CallAnalyticsPage />} />
+            </Routes>
+          </UserProvider>
           <Toaster richColors />
         </BrowserRouter>
       </TooltipProvider>

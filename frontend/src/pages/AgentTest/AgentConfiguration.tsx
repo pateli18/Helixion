@@ -19,7 +19,6 @@ import { loadAndFormatDate } from "@/utils/dateFormat";
 import { PlusIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useAuthInfo } from "@propelauth/react";
 import {
   Dialog,
   DialogTitle,
@@ -29,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import ReactDiffViewer from "react-diff-viewer-continued";
+import { useUserContext } from "@/contexts/UserContext";
 
 const extractFieldsFromSystemMessage = (value: string) => {
   // Extract all fields surrounded by {}
@@ -50,11 +50,13 @@ const CreateNewAgentModal = (props: {
   setAgentId: (agentId: { baseId: string; versionId: string } | null) => void;
   triggerButtonText: string;
 }) => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+
   const handleCreateNewAgent = async (name: string) => {
-    const response = await createAgent(name, authInfo.accessToken ?? null);
+    const accessToken = await getAccessToken();
+    const response = await createAgent(name, accessToken);
     if (response !== null) {
       props.setAgents((prev) => [response, ...prev]);
       props.setAgentId({
@@ -142,7 +144,7 @@ const BaseAgentConfiguration = (props: {
   setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
   activeAgent?: Agent;
 }) => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
   const [saveLoading, setSaveLoading] = useState(false);
   const [newVersion, setNewVersion] = useState<Agent | null>(null);
   const [showDiff, setShowDiff] = useState(false);
@@ -158,6 +160,7 @@ const BaseAgentConfiguration = (props: {
   const handleSaveVersion = async () => {
     if (newVersion) {
       setSaveLoading(true);
+      const accessToken = await getAccessToken();
       const newFields = extractNewFieldsFromSystemMessage(
         newVersion.system_message,
         props.activeAgent?.sample_values ?? {}
@@ -165,7 +168,7 @@ const BaseAgentConfiguration = (props: {
       const response = await createNewAgentVersion(
         newVersion,
         newFields,
-        authInfo.accessToken ?? null
+        accessToken
       );
       setSaveLoading(false);
       if (response !== null) {
@@ -189,10 +192,8 @@ const BaseAgentConfiguration = (props: {
   };
 
   const handleMakeActive = async (agent: Agent) => {
-    const response = await activateAgentVersion(
-      agent.id,
-      authInfo.accessToken ?? null
-    );
+    const accessToken = await getAccessToken();
+    const response = await activateAgentVersion(agent.id, accessToken);
     if (response === true) {
       props.setAgents((prev) => {
         const newAgents = prev.map((a) => {

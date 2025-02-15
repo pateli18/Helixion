@@ -4,7 +4,6 @@ import base64
 import io
 import json
 import logging
-import wave
 import zipfile
 from typing import AsyncGenerator, cast
 from uuid import uuid4

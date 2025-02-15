@@ -2,7 +2,6 @@ import { memo, useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { CallDisplay } from "@/components/CallDisplay";
 import { PhoneCallMetadata } from "@/types";
-import { useAuthInfo } from "@propelauth/react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { getCallHistory } from "@/utils/apiCalls";
@@ -13,10 +12,11 @@ import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CallHistoryTable } from "@/components/table/CallTable";
+import { useUserContext } from "@/contexts/UserContext";
 
 const CallHistoryTableWithFilters = memo(
   (props: { setSelectedCall: (call: PhoneCallMetadata) => void }) => {
-    const authInfo = useAuthInfo();
+    const { getAccessToken } = useUserContext();
     const isMobile = useIsMobile();
     const [searchTerm, setSearchTerm] = useState("");
     const [audioAvailableOnly, setAudioAvailableOnly] = useState(false);
@@ -28,16 +28,20 @@ const CallHistoryTableWithFilters = memo(
     const [isLoading, setIsLoading] = useState(true);
     const [callHistory, setCallHistory] = useState<PhoneCallMetadata[]>([]);
 
-    useEffect(() => {
+    const fetchCallHistory = async () => {
+      const accessToken = await getAccessToken();
       setIsLoading(true);
-      getCallHistory(authInfo.accessToken ?? null).then((callHistory) => {
-        if (callHistory === null) {
-          toast.error("Failed to fetch call history");
-        } else {
-          setCallHistory(callHistory);
-        }
-        setIsLoading(false);
-      });
+      const callHistory = await getCallHistory(accessToken);
+      if (callHistory === null) {
+        toast.error("Failed to fetch call history");
+      } else {
+        setCallHistory(callHistory);
+      }
+      setIsLoading(false);
+    };
+
+    useEffect(() => {
+      fetchCallHistory();
     }, []);
 
     const filteredSearchData = callHistory.filter((call) => {

@@ -28,7 +28,7 @@ import {
 } from "./ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrowserAudioPlayer } from "./audio/BrowserAudioPlayer";
-import { useAuthInfo } from "@propelauth/react";
+import { useUserContext } from "@/contexts/UserContext";
 
 const SheetView = (props: {
   children: React.ReactNode;
@@ -74,7 +74,7 @@ export const CallDisplay = (props: {
   call: PhoneCallMetadata | null;
   setCall: (call: PhoneCallMetadata | null) => void;
 }) => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
@@ -93,34 +93,37 @@ export const CallDisplay = (props: {
   const [currentSegment, setCurrentSegment] = useState<SpeakerSegment | null>(
     null
   );
+
+  const fetchAudioPlayback = async (callId: string) => {
+    setTranscriptLoading(true);
+    const accessToken = await getAccessToken();
+    const playback = await getAudioPlayback(callId, accessToken);
+    if (playback !== null) {
+      // conver to blob url
+      const blob = new Blob(
+        [
+          Uint8Array.from(atob(playback.audio_data_b64), (c) =>
+            c.charCodeAt(0)
+          ),
+        ],
+        { type: playback.content_type }
+      );
+      const audioURL = URL.createObjectURL(blob);
+
+      setAudioPlayback({
+        ...playback,
+        audio_url: audioURL,
+      });
+    } else {
+      toast.error("Failed to fetch audio playback");
+    }
+    setTranscriptLoading(false);
+  };
+
   useEffect(() => {
     if (!props.call) return;
     setOpen(true);
-    setTranscriptLoading(true);
-    getAudioPlayback(props.call.id, authInfo.accessToken ?? null).then(
-      (playback) => {
-        if (playback !== null) {
-          // conver to blob url
-          const blob = new Blob(
-            [
-              Uint8Array.from(atob(playback.audio_data_b64), (c) =>
-                c.charCodeAt(0)
-              ),
-            ],
-            { type: playback.content_type }
-          );
-          const audioURL = URL.createObjectURL(blob);
-
-          setAudioPlayback({
-            ...playback,
-            audio_url: audioURL,
-          });
-        } else {
-          toast.error("Failed to fetch audio transcript");
-        }
-        setTranscriptLoading(false);
-      }
-    );
+    fetchAudioPlayback(props.call.id);
   }, [props.call?.id]);
 
   const onOpenChange = (open: boolean) => {
@@ -186,8 +189,8 @@ export const LiveCallDisplay = (props: {
   phoneCallId: string | null;
   setPhoneCallId: (phoneCallId: string | null) => void;
 }) => {
-  const authInfo = useAuthInfo();
   const isMobile = useIsMobile();
+  const { getAccessToken } = useUserContext();
   const [open, setOpen] = useState(false);
   const [speakerSegments, setSpeakerSegments] = useState<SpeakerSegment[]>([]);
   const [currentSegment, setCurrentSegment] = useState<SpeakerSegment | null>(
@@ -198,10 +201,8 @@ export const LiveCallDisplay = (props: {
 
   const handleHangUp = async () => {
     if (!props.phoneCallId) return;
-    const response = await hangUp(
-      props.phoneCallId,
-      authInfo.accessToken ?? null
-    );
+    const accessToken = await getAccessToken();
+    const response = await hangUp(props.phoneCallId, accessToken);
     if (response === false) {
       toast.error("Failed to hang up call, please try again");
     } else {
@@ -211,10 +212,11 @@ export const LiveCallDisplay = (props: {
 
   const runListenInStream = async () => {
     if (!props.phoneCallId) return;
+    const accessToken = await getAccessToken();
     try {
       for await (const payload of listenInStream(
         props.phoneCallId,
-        authInfo.accessToken ?? null
+        accessToken
       )) {
         if (payload.type === "call_end") {
           setCallEnded(true);

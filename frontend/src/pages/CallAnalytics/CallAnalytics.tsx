@@ -29,7 +29,6 @@ import {
   getCallHistory,
   updateInstructionsFromReport,
 } from "@/utils/apiCalls";
-import { useAuthInfo } from "@propelauth/react";
 import { BarChart, XAxis } from "recharts";
 import { memo, useEffect, useState } from "react";
 import { Bar } from "recharts";
@@ -48,6 +47,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ReloadIcon } from "@radix-ui/react-icons";
+import { useUserContext } from "@/contexts/UserContext";
 
 const MAX_BARS = 30;
 
@@ -250,7 +250,7 @@ const TagView = (props: {
 const UpdateAgentInstructionsDialog = (props: {
   selectedReport: AnalyticsReport;
 }) => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -258,7 +258,8 @@ const UpdateAgentInstructionsDialog = (props: {
 
   useEffect(() => {
     const fetchAgents = async () => {
-      const agentsResponse = await getAgents(authInfo.accessToken ?? null);
+      const accessToken = await getAccessToken();
+      const agentsResponse = await getAgents(accessToken);
       if (agentsResponse !== null) {
         setAgents(agentsResponse.filter((agent) => agent.active === true));
       } else {
@@ -271,10 +272,11 @@ const UpdateAgentInstructionsDialog = (props: {
   const updateInstructions = async () => {
     if (selectedAgent) {
       setIsUpdating(true);
+      const accessToken = await getAccessToken();
       const response = await updateInstructionsFromReport(
         selectedAgent.id,
         props.selectedReport.id,
-        authInfo.accessToken ?? null
+        accessToken
       );
       setIsUpdating(false);
       if (response !== null) {
@@ -399,7 +401,7 @@ const ReportView = (props: {
 };
 
 export const CallAnalyticsPage = () => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
 
   const [isLoading, setIsLoading] = useState(true);
   const [analyticsGroups, setAnalyticsGroups] = useState<AnalyticsGroup[]>([]);
@@ -421,9 +423,10 @@ export const CallAnalyticsPage = () => {
   }, [selectedGroup]);
 
   const fetchData = async () => {
+    const accessToken = await getAccessToken();
     const [analyticsGroupsResponse, callHistoryResponse] = await Promise.all([
-      getAnalyticsGroups(authInfo.accessToken ?? null),
-      getCallHistory(authInfo.accessToken ?? null),
+      getAnalyticsGroups(accessToken),
+      getCallHistory(accessToken),
     ]);
 
     if (analyticsGroupsResponse === null) {

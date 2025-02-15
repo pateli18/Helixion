@@ -19,24 +19,45 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { ChevronsUpDown } from "lucide-react";
-import { useEffect } from "react";
-import * as Sentry from "@sentry/react";
+import { useUserContext } from "@/contexts/UserContext";
+import { cn } from "@/lib/utils";
+
+const OrganizationSwitcher = () => {
+  const { orgs, activeOrgId, setActiveOrgId } = useUserContext();
+
+  return (
+    <>
+      {orgs.length > 1 && (
+        <>
+          <DropdownMenuLabel className="text-muted-foreground font-normal">
+            Switch Organization
+          </DropdownMenuLabel>
+          {orgs.map((org) => (
+            <DropdownMenuItem
+              key={org.orgId}
+              onClick={() => {
+                setActiveOrgId(org.orgId);
+                window.location.reload();
+              }}
+              className={cn(
+                activeOrgId === org.orgId &&
+                  "bg-sidebar-accent text-sidebar-accent-foreground"
+              )}
+            >
+              {org.orgName}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+        </>
+      )}
+    </>
+  );
+};
 
 export const UserNav = () => {
   const authInfo = useAuthInfo();
   const logoutFn = useLogoutFunction();
   const { getAccountPageUrl } = useHostedPageUrls();
-
-  useEffect(() => {
-    if (authInfo.isLoggedIn) {
-      if (import.meta.env.VITE_ENV === "prod") {
-        Sentry.setUser({
-          email: authInfo.user!.email,
-          id: authInfo.user!.userId,
-        });
-      }
-    }
-  }, [authInfo.isLoggedIn]);
 
   return (
     <SidebarMenu>
@@ -62,14 +83,7 @@ export const UserNav = () => {
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end" forceMount>
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-xs leading-none text-muted-foreground">
-                  {authInfo.user?.email}
-                </p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
+            <OrganizationSwitcher />
             <DropdownMenuGroup>
               <DropdownMenuItem
                 onClick={() => window.open(getAccountPageUrl(), "_blank")}

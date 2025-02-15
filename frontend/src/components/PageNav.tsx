@@ -17,8 +17,7 @@ import { PersonIcon } from "@radix-ui/react-icons";
 import { ArchiveIcon, BarChartIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { UserNav } from "./UserNav";
-import { useAuthInfo } from "@propelauth/react";
-import { UseAuthInfoProps } from "@propelauth/react/dist/types/hooks/useAuthInfo";
+import { useUserContext } from "@/contexts/UserContext";
 
 const SidebarItem = (props: {
   icon: React.ReactNode;
@@ -44,19 +43,10 @@ const SidebarItem = (props: {
   );
 };
 
-const getOrganizationName = (authInfo: UseAuthInfoProps) => {
-  const orgs = authInfo.orgHelper?.getOrgs();
-  if (orgs?.length === 1) {
-    return orgs[0].orgName;
-  }
-  return undefined;
-};
-
 export const PageSidebar = () => {
-  const authInfo = useAuthInfo();
+  const { activeOrg } = useUserContext();
   const { isMobile, state } = useSidebar();
 
-  const organizationName = getOrganizationName(authInfo);
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -68,9 +58,9 @@ export const PageSidebar = () => {
                 {!isMobile && state !== "collapsed" && (
                   <span className="text-lg font-semibold">Helixion</span>
                 )}
-                {!isMobile && state !== "collapsed" && organizationName && (
+                {!isMobile && state !== "collapsed" && activeOrg && (
                   <span className="text-sm text-muted-foreground">
-                    {organizationName}
+                    {activeOrg.orgName}
                   </span>
                 )}
               </div>

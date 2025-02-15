@@ -17,10 +17,10 @@ import {
   extractNewFieldsFromSystemMessage,
 } from "./AgentConfiguration";
 import { Badge } from "@/components/ui/badge";
-import { useAuthInfo } from "@propelauth/react";
 import { LoadingView } from "@/components/Loader";
 import { useSearchParams } from "react-router-dom";
 import { Agent } from "@/types";
+import { useUserContext } from "@/contexts/UserContext";
 
 const CallPhoneNumber = (props: {
   handleCallPhoneNumber: (phoneNumber: string) => Promise<void>;
@@ -104,17 +104,18 @@ const Dialer = (props: {
   activeAgent: Agent;
   setAgents: React.Dispatch<React.SetStateAction<Agent[]>>;
 }) => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
   const [phoneCallId, setPhoneCallId] = useState<string | null>(null);
   const [browserCallId, setBrowserCallId] = useState<string | null>(null);
   const [browserCallLoading, setBrowserCallLoading] = useState(false);
   const [sampleDetailsLoading, setSampleDetailsLoading] = useState(false);
   const handleCallPhoneNumber = async (phoneNumber: string) => {
+    const accessToken = await getAccessToken();
     const response = await outboundCall(
       phoneNumber,
       props.activeAgent?.id ?? "",
       props.activeAgent?.sample_values ?? {},
-      authInfo.accessToken ?? null
+      accessToken
     );
     if (response === null) {
       toast.error("Failed to start call, please try again");
@@ -125,10 +126,11 @@ const Dialer = (props: {
 
   const handleCallBrowser = async () => {
     setBrowserCallLoading(true);
+    const accessToken = await getAccessToken();
     const response = await browserCall(
       props.activeAgent.id,
       props.activeAgent.sample_values,
-      authInfo.accessToken ?? null
+      accessToken
     );
     if (response === null) {
       toast.error("Failed to start call, please try again");
@@ -140,12 +142,13 @@ const Dialer = (props: {
 
   const handleGetSampleValues = async () => {
     setSampleDetailsLoading(true);
+    const accessToken = await getAccessToken();
     const response = await getSampleValues(
       extractNewFieldsFromSystemMessage(
         props.activeAgent.system_message,
         props.activeAgent.sample_values
       ),
-      authInfo.accessToken ?? null
+      accessToken
     );
     if (response === null) {
       toast.error("Failed to get sample details, please try again");
@@ -256,12 +259,12 @@ const Dialer = (props: {
 };
 
 export const AgentTestPage = () => {
-  const authInfo = useAuthInfo();
+  const { getAccessToken } = useUserContext();
   const [agentId, setAgentId] = useState<{
     baseId: string;
     versionId: string;
   } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<Agent[]>([]);
   const activeAgent = agents.find((agent) => agent.id === agentId?.versionId);
@@ -280,39 +283,44 @@ export const AgentTestPage = () => {
   }, [agentId]);
 
   useEffect(() => {
-    getAgents(authInfo.accessToken ?? null).then((response) => {
-      setIsLoading(false);
-      if (response !== null) {
-        setAgents(response);
-
-        // Handle URL parameters
-        const baseId = searchParams.get("baseId");
-        const versionId = searchParams.get("versionId");
-        if (baseId && versionId) {
-          const matchingAgent = response.find(
-            (agent) => agent.id === versionId && agent.base_id === baseId
-          );
-          if (matchingAgent) {
-            setAgentId({
-              baseId: matchingAgent.base_id,
-              versionId: matchingAgent.id,
-            });
-            return;
-          }
-        }
-
-        // If no valid URL parameters or agent not found, select first agent
-        if (agentId === null && response.length > 0) {
-          setAgentId({
-            baseId: response[0].base_id,
-            versionId: response[0].id,
-          });
-        }
-      } else {
-        toast.error("Failed to fetch agents");
-      }
-    });
+    fetchAgents();
   }, []);
+
+  const fetchAgents = async () => {
+    setIsLoading(true);
+    const accessToken = await getAccessToken();
+    const response = await getAgents(accessToken);
+    setIsLoading(false);
+    if (response !== null) {
+      setAgents(response);
+
+      // Handle URL parameters
+      const baseId = searchParams.get("baseId");
+      const versionId = searchParams.get("versionId");
+      if (baseId && versionId) {
+        const matchingAgent = response.find(
+          (agent) => agent.id === versionId && agent.base_id === baseId
+        );
+        if (matchingAgent) {
+          setAgentId({
+            baseId: matchingAgent.base_id,
+            versionId: matchingAgent.id,
+          });
+          return;
+        }
+      }
+
+      // If no valid URL parameters or agent not found, select first agent
+      if (agentId === null && response.length > 0) {
+        setAgentId({
+          baseId: response[0].base_id,
+          versionId: response[0].id,
+        });
+      }
+    } else {
+      toast.error("Failed to fetch agents");
+    }
+  };
 
   return (
     <Layout title="Agent Tester">

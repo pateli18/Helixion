@@ -13,10 +13,13 @@ _auth = init_auth(settings.auth_url, settings.auth_api_key)
 
 def require_user(user: User = Depends(_auth.require_user)) -> User:
     org_map = user.org_id_to_org_member_info
-    if org_map is None or len(org_map) != 1:
+    if org_map is None:
         raise HTTPException(
-            status_code=403, detail="User is part of multiple organizations"
+            status_code=403, detail="User is not a member of any organization"
         )
-    org_id = next(iter(org_map))
-    user.active_org_id = org_id
+    if len(org_map) > 1 and not user.email.endswith("@helixion.ai"):
+        raise HTTPException(
+            status_code=403,
+            detail="User is a member of multiple organizations",
+        )
     return user
