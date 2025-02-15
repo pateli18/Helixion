@@ -114,7 +114,7 @@ async def create_agent(
     return response
 
 
-class ForwardCallNumber(BaseModel):
+class TransferCallNumber(BaseModel):
     phone_number: str
     label: str
 
@@ -122,8 +122,8 @@ class ForwardCallNumber(BaseModel):
 class UpdateToolConfigurationRequest(BaseModel):
     hang_up: bool
     send_text: bool
-    forward_call: bool
-    forward_call_numbers: list[ForwardCallNumber]
+    transfer_call: bool
+    transfer_call_numbers: list[TransferCallNumber]
     enter_keypad: bool
 
 
@@ -147,8 +147,9 @@ async def update_tool_configuration(
     tool_configuration = {
         "hang_up": request.hang_up,
         "send_text": request.send_text,
-        "forward_call": [
-            item.model_dump() for item in request.forward_call_numbers
+        "transfer_call": request.transfer_call,
+        "transfer_call_numbers": [
+            item.model_dump() for item in request.transfer_call_numbers
         ],
         "enter_keypad": request.enter_keypad,
     }

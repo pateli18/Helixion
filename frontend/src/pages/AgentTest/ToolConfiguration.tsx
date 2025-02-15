@@ -30,8 +30,8 @@ import { Badge } from "@/components/ui/badge";
 const ToolConfigurationSchema = z.object({
   hang_up: z.boolean(),
   send_text: z.boolean(),
-  forward_call: z.boolean(),
-  forward_call_numbers: z.array(
+  transfer_call: z.boolean(),
+  transfer_call_numbers: z.array(
     z.object({
       phone_number: z.string(),
       label: z.string(),
@@ -42,7 +42,7 @@ const ToolConfigurationSchema = z.object({
 
 const SwitchField = (props: {
   form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
-  name: "hang_up" | "send_text" | "forward_call" | "enter_keypad";
+  name: "hang_up" | "send_text" | "transfer_call" | "enter_keypad";
   label: string;
   description: string;
 }) => {
@@ -78,11 +78,11 @@ const ToolConfigurationForm = (props: {
     defaultValues: {
       hang_up: props.existingToolConfiguration.hang_up,
       send_text: props.existingToolConfiguration.send_text ?? false,
-      forward_call:
-        props.existingToolConfiguration.forward_call &&
-        props.existingToolConfiguration.forward_call.length > 0,
-      forward_call_numbers:
-        props.existingToolConfiguration.forward_call_numbers ?? [],
+      transfer_call:
+        props.existingToolConfiguration.transfer_call &&
+        props.existingToolConfiguration.transfer_call.length > 0,
+      transfer_call_numbers:
+        props.existingToolConfiguration.transfer_call_numbers ?? [],
       enter_keypad: props.existingToolConfiguration.enter_keypad ?? false,
     },
   });
@@ -94,8 +94,8 @@ const ToolConfigurationForm = (props: {
       props.agentId,
       data.hang_up,
       data.send_text,
-      data.forward_call,
-      data.forward_call ? data.forward_call_numbers : [],
+      data.transfer_call,
+      data.transfer_call ? data.transfer_call_numbers : [],
       data.enter_keypad,
       accessToken
     );
@@ -133,9 +133,9 @@ const ToolConfigurationForm = (props: {
             />
             <SwitchField
               form={form}
-              name="forward_call"
-              label="Forward call"
-              description="The agent can forward the call to other numbers"
+              name="transfer_call"
+              label="Transfer call"
+              description="The agent can transfer the call to other numbers"
             />
           </div>
         </div>
@@ -197,9 +197,9 @@ export const ToolConfigurationView = (props: {
       {props.existingToolConfiguration.send_text && (
         <ToolBadge label="Send text" />
       )}
-      {props.existingToolConfiguration.forward_call &&
-        props.existingToolConfiguration.forward_call.length > 0 && (
-          <ToolBadge label="Forward call" />
+      {props.existingToolConfiguration.transfer_call &&
+        props.existingToolConfiguration.transfer_call.length > 0 && (
+          <ToolBadge label="Transfer call" />
         )}
       {props.existingToolConfiguration.enter_keypad && (
         <ToolBadge label="Enter keypad" />

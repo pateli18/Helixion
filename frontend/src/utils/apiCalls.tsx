@@ -282,8 +282,8 @@ export const updateToolConfiguration = async (
   agentId: string,
   hangUp: boolean,
   sendText: boolean,
-  forwardCall: boolean,
-  forwardCallNumbers: { phone_number: string; label: string }[],
+  transferCall: boolean,
+  transferCallNumbers: { phone_number: string; label: string }[],
   enterKeypad: boolean,
   accessToken: string | null
 ) => {
@@ -295,8 +295,8 @@ export const updateToolConfiguration = async (
       body: {
         hang_up: hangUp,
         send_text: sendText,
-        forward_call: forwardCall,
-        forward_call_numbers: forwardCallNumbers,
+        transfer_call: transferCall,
+        transfer_call_numbers: transferCallNumbers,
         enter_keypad: enterKeypad,
       },
       accessToken,
