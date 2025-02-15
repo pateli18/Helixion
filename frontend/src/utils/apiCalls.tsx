@@ -179,6 +179,7 @@ export const createNewAgentVersion = async (
           active: agent.active,
           sample_values: agent.sample_values,
           incoming_phone_number: agent.incoming_phone_number,
+          tool_configuration: agent.tool_configuration,
         },
         new_fields: newFields,
       },
@@ -282,7 +283,6 @@ export const updateToolConfiguration = async (
   agentId: string,
   hangUp: boolean,
   sendText: boolean,
-  transferCall: boolean,
   transferCallNumbers: { phone_number: string; label: string }[],
   enterKeypad: boolean,
   accessToken: string | null
@@ -295,7 +295,6 @@ export const updateToolConfiguration = async (
       body: {
         hang_up: hangUp,
         send_text: sendText,
-        transfer_call: transferCall,
         transfer_call_numbers: transferCallNumbers,
         enter_keypad: enterKeypad,
       },

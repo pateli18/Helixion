@@ -64,7 +64,7 @@ class ToolNames(str, Enum):
     hang_up = "hang_up"
     query_documents = "query_documents"
     enter_keypad = "enter_keypad"
-    transfer_call = "transfer_call"
+    transfer_call = "transfer_call_numbers"
     send_text_message = "send_text_message"
 
 

@@ -176,7 +176,7 @@ class CallRouter:
                     elif message["name"] == "send_text_message":
                         arguments = json.loads(message["arguments"])
                         await self._send_text_message(
-                            arguments["body"],
+                            arguments["message"],
                         )
                     elif message["name"] == "transfer_call":
                         arguments = json.loads(message["arguments"])

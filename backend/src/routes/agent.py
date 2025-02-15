@@ -122,7 +122,6 @@ async def create_agent(
 class UpdateToolConfigurationRequest(BaseModel):
     hang_up: bool
     send_text: bool
-    transfer_call: bool
     transfer_call_numbers: list[TransferCallNumber]
     enter_keypad: bool
 
@@ -147,7 +146,6 @@ async def update_tool_configuration(
     tool_configuration = {
         "hang_up": request.hang_up,
         "send_text": request.send_text,
-        "transfer_call": request.transfer_call,
         "transfer_call_numbers": [
             item.model_dump() for item in request.transfer_call_numbers
         ],

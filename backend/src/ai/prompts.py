@@ -80,12 +80,12 @@ text_message_tool = {
     "parameters": {
         "type": "object",
         "properties": {
-            "body": {
+            "message": {
                 "type": "string",
-                "description": "The body of the text message",
+                "description": "The text message to send",
             },
         },
-        "required": ["body"],
+        "required": ["message"],
     },
 }
 

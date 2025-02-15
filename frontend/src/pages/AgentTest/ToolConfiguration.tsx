@@ -80,9 +80,11 @@ const ToolConfigurationForm = (props: {
       send_text: props.existingToolConfiguration.send_text ?? false,
       transfer_call:
         props.existingToolConfiguration.transfer_call &&
-        props.existingToolConfiguration.transfer_call.length > 0,
+        props.existingToolConfiguration.transfer_call.length > 0
+          ? true
+          : false,
       transfer_call_numbers:
-        props.existingToolConfiguration.transfer_call_numbers ?? [],
+        props.existingToolConfiguration.transfer_call_numbers || [],
       enter_keypad: props.existingToolConfiguration.enter_keypad ?? false,
     },
   });
@@ -94,13 +96,13 @@ const ToolConfigurationForm = (props: {
       props.agentId,
       data.hang_up,
       data.send_text,
-      data.transfer_call,
       data.transfer_call ? data.transfer_call_numbers : [],
       data.enter_keypad,
       accessToken
     );
     if (response !== null) {
       props.successCallback(response);
+      toast.success("Tool configuration updated");
     } else {
       toast.error("Failed to update tool configuration");
     }
@@ -140,7 +142,7 @@ const ToolConfigurationForm = (props: {
           </div>
         </div>
         <Button disabled={submitLoading} type="submit">
-          Submit{" "}
+          Update{" "}
           {submitLoading && (
             <ReloadIcon className="ml-2 h-4 w-4 animate-spin" />
           )}
