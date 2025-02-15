@@ -17,9 +17,4 @@ def require_user(user: User = Depends(_auth.require_user)) -> User:
         raise HTTPException(
             status_code=403, detail="User is not a member of any organization"
         )
-    if len(org_map) > 1 and not user.email.endswith("@helixion.ai"):
-        raise HTTPException(
-            status_code=403,
-            detail="User is a member of multiple organizations",
-        )
     return user
