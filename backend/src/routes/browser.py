@@ -115,7 +115,11 @@ async def call_stream(
         start_speaking_buffer_ms=500,
         documents=documents,
     ) as ai:
-        call_router = BrowserRouter(ai)
+        call_router = BrowserRouter(
+            agent_id=phone_call_model.agent.id,
+            organization_id=cast(str, phone_call_model.organization_id),
+            ai_caller=ai,
+        )
         await asyncio.gather(
             call_router.receive_from_human_call(websocket),
             call_router.send_to_human(websocket),

@@ -15,6 +15,7 @@ from src.audio.sounds import get_sound_base64
 from src.db.api import insert_phone_call_event, insert_text_message
 from src.db.base import async_session_scope
 from src.helixion_types import (
+    BROWSER_NAME,
     PhoneCallEndReason,
     PhoneCallStatus,
     PhoneCallType,
@@ -293,13 +294,22 @@ class CallRouter:
 
 
 class BrowserRouter:
+    agent_id: SerializedUUID
+    organization_id: str
     last_ai_item_id: Union[str, None]
     mark_queue: list[int]
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
     hang_up_reason: Optional[PhoneCallEndReason]
 
-    def __init__(self, ai_caller: AiCaller):
+    def __init__(
+        self,
+        agent_id: SerializedUUID,
+        organization_id: str,
+        ai_caller: AiCaller,
+    ):
+        self.agent_id = agent_id
+        self.organization_id = organization_id
         self.last_ai_item_id = None
         self.mark_queue = []
         self.mark_queue_elapsed_time = 0
@@ -326,6 +336,57 @@ class BrowserRouter:
                 },
                 db,
             )
+
+    async def _send_text_message(
+        self, body: str, websocket: WebSocket
+    ) -> None:
+        await websocket.send_json(
+            {
+                "event": "message",
+                "payload": {"title": "SMS Message", "body": body},
+            }
+        )
+        async with async_session_scope() as db:
+            await insert_text_message(
+                self.agent_id,
+                BROWSER_NAME,
+                BROWSER_NAME,
+                body,
+                TextMessageType.outbound,
+                "no-sid",
+                str(self.ai_caller.phone_call_id),
+                self.organization_id,
+                db,
+            )
+
+    async def _transfer_call(
+        self, phone_number_label: str, websocket: WebSocket
+    ) -> None:
+        transfer_call_number: Optional[str] = next(
+            (
+                item["phone_number"]
+                for item in self.ai_caller.tool_configuration[
+                    "transfer_call_numbers"
+                ]
+                if item["label"] == phone_number_label
+            ),
+            None,
+        )
+        if transfer_call_number is None:
+            logger.warning(
+                f"Transfer call number not found: {phone_number_label}, call will not be transferred"
+            )
+        else:
+            await websocket.send_json(
+                {
+                    "event": "message",
+                    "payload": {
+                        "title": "Call Transer",
+                        "body": f"Call would be transferred to {transfer_call_number}",
+                    },
+                }
+            )
+            self._hang_up_reason = PhoneCallEndReason.transferred
 
     async def send_to_human(self, websocket: WebSocket):
         try:
@@ -369,6 +430,17 @@ class BrowserRouter:
                             message["item_id"],
                             message["call_id"],
                             documents,
+                        )
+                    elif message["name"] == "send_text_message":
+                        arguments = json.loads(message["arguments"])
+                        await self._send_text_message(
+                            arguments["message"],
+                            websocket,
+                        )
+                    elif message["name"] == "transfer_call":
+                        arguments = json.loads(message["arguments"])
+                        await self._transfer_call(
+                            arguments["phone_number_label"], websocket
                         )
                     else:
                         logger.warning(
