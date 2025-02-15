@@ -20,6 +20,7 @@ class AgentModel(Base, TimestampMixin):
     active = Column(Boolean, nullable=False)
     sample_values = Column(JSONB, nullable=True)
     incoming_phone_number = Column(VARCHAR, nullable=True)
+    tool_configuration = Column(JSONB, nullable=True)
     user_id = Column(VARCHAR, ForeignKey("user.id"), nullable=False)
     organization_id = Column(
         VARCHAR, ForeignKey("organization.id"), nullable=False

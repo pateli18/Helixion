@@ -18,6 +18,7 @@ from src.db.api import (
     get_analytics_report,
     insert_agent,
     make_agent_active,
+    update_agent_tool_configuration,
 )
 from src.db.base import get_session
 from src.db.converter import convert_agent_model
@@ -101,6 +102,7 @@ async def create_agent(
             active=True,
             sample_values={},
             incoming_phone_number=None,
+            tool_configuration={"hang_up": True},
         ),
         user.user_id,
         cast(str, user.active_org_id),
@@ -110,6 +112,49 @@ async def create_agent(
     response = convert_agent_model(new_agent_model)
     await db.commit()
     return response
+
+
+class ForwardCallNumber(BaseModel):
+    phone_number: str
+    label: str
+
+
+class UpdateToolConfigurationRequest(BaseModel):
+    hang_up: bool
+    send_text: bool
+    forward_call: bool
+    forward_call_numbers: list[ForwardCallNumber]
+    enter_keypad: bool
+
+
+@router.post(
+    "/update-tool-configuration/{agent_id}",
+    response_model=dict,
+)
+async def update_tool_configuration(
+    agent_id: SerializedUUID,
+    request: UpdateToolConfigurationRequest,
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+) -> dict:
+    agent = await get_agent(agent_id, db)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if cast(str, agent.organization_id) != user.active_org_id:
+        raise HTTPException(status_code=403, detail="Agent not found")
+
+    # format the tool configuration
+    tool_configuration = {
+        "hang_up": request.hang_up,
+        "send_text": request.send_text,
+        "forward_call": [
+            item.model_dump() for item in request.forward_call_numbers
+        ],
+        "enter_keypad": request.enter_keypad,
+    }
+    await update_agent_tool_configuration(agent_id, tool_configuration, db)
+    await db.commit()
+    return tool_configuration
 
 
 class SampleValuesRequest(BaseModel):
@@ -169,6 +214,7 @@ async def update_instructions_from_report(
             incoming_phone_number=cast(
                 Union[str, None], agent.incoming_phone_number
             ),
+            tool_configuration=cast(dict, agent.tool_configuration),
         ),
         user.user_id,
         cast(str, user.active_org_id),

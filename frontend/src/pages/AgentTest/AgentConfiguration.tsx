@@ -29,6 +29,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import ReactDiffViewer from "react-diff-viewer-continued";
 import { useUserContext } from "@/contexts/UserContext";
+import { ToolConfigurationView } from "./ToolConfiguration";
 
 const extractFieldsFromSystemMessage = (value: string) => {
   // Extract all fields surrounded by {}
@@ -414,13 +415,23 @@ const BaseAgentConfiguration = (props: {
         />
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {props.activeAgent?.document_metadata.map((document) => (
-          <Badge variant="secondary" key={document.id}>
-            {document.name}
-          </Badge>
-        ))}
-      </div>
+      {props.activeAgent && (
+        <ToolConfigurationView
+          agentId={props.activeAgent.id}
+          existingToolConfiguration={props.activeAgent.tool_configuration}
+          successCallback={(toolConfiguration) => {
+            props.setAgents((prev) => {
+              const newAgents = prev.map((agent) => {
+                if (agent.id === props.activeAgent?.id) {
+                  return { ...agent, tool_configuration: toolConfiguration };
+                }
+                return agent;
+              });
+              return newAgents;
+            });
+          }}
+        />
+      )}
       {newVersion && (
         <div className="flex gap-2">
           <Button onClick={handleSaveVersion}>

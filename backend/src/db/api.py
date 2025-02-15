@@ -304,3 +304,15 @@ async def get_user(
 ) -> Optional[UserModel]:
     result = await db.execute(select(UserModel).where(UserModel.id == user_id))
     return result.scalar_one_or_none()
+
+
+async def update_agent_tool_configuration(
+    agent_id: SerializedUUID,
+    tool_configuration: dict,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        update(AgentModel)
+        .where(AgentModel.id == agent_id)
+        .values(tool_configuration=tool_configuration)
+    )

@@ -85,6 +85,8 @@ def convert_agent_model(agent: AgentModel) -> Agent:
         sample_values=cast(Optional[dict], agent.sample_values) or {},
         incoming_phone_number=cast(Optional[str], agent.incoming_phone_number),
         user_email=cast(str, agent.user.email),
+        tool_configuration=cast(Optional[dict], agent.tool_configuration)
+        or {},
     )
 
 

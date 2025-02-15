@@ -286,6 +286,7 @@ class AgentBase(BaseModel):
     active: bool
     sample_values: dict
     incoming_phone_number: Optional[str]
+    tool_configuration: dict
 
 
 class Agent(AgentBase):

@@ -277,3 +277,32 @@ export const activateAgentVersion = async (
   }
   return response;
 };
+
+export const updateToolConfiguration = async (
+  agentId: string,
+  hangUp: boolean,
+  sendText: boolean,
+  forwardCall: boolean,
+  forwardCallNumbers: { phone_number: string; label: string }[],
+  enterKeypad: boolean,
+  accessToken: string | null
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<Record<string, any>>({
+      url: `${baseUrl}/api/v1/agent/update-tool-configuration/${agentId}`,
+      method: "POST",
+      body: {
+        hang_up: hangUp,
+        send_text: sendText,
+        forward_call: forwardCall,
+        forward_call_numbers: forwardCallNumbers,
+        enter_keypad: enterKeypad,
+      },
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};

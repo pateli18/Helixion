@@ -74,21 +74,21 @@ class AiSessionConfiguration(BaseModel):
     tools: list[dict] = Field(default_factory=list)
 
     @classmethod
-    def default(
+    def create(
         cls,
         system_prompt: str,
         user_info: dict,
         audio_format: AudioFormat,
-        tool_names: list[ToolNames],
+        tool_configuration: dict,
     ) -> "AiSessionConfiguration":
         system_message = system_prompt.format(**user_info)
 
         tools: list[dict] = []
-        if ToolNames.hang_up in tool_names:
+        if ToolNames.hang_up.value in tool_configuration:
             tools.extend(hang_up_tools)
-        if ToolNames.query_documents in tool_names:
+        if ToolNames.query_documents.value in tool_configuration:
             tools.append(query_documents_tool)
-        if ToolNames.enter_keypad in tool_names:
+        if ToolNames.enter_keypad.value in tool_configuration:
             tools.append(enter_keypad_tool)
 
         return cls(
@@ -182,9 +182,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         audio_format: AudioFormat = "g711_ulaw",
         start_speaking_buffer_ms: Optional[int] = None,
         documents: Optional[list[Document]] = None,
-        tool_names: list[ToolNames] = [
-            ToolNames.hang_up,
-        ],
+        tool_configuration: Optional[dict] = None,
     ):
         self._exit_stack = AsyncExitStack()
         self._ws_client = None
@@ -193,13 +191,14 @@ class AiCaller(AsyncContextManager["AiCaller"]):
 
         self.documents = documents or []
 
+        tool_configuration = tool_configuration or {}
         if len(self.documents) > 0:
-            tool_names.append(ToolNames.query_documents)
-        self.session_configuration = AiSessionConfiguration.default(
+            tool_configuration["query_documents"] = {}
+        self.session_configuration = AiSessionConfiguration.create(
             system_prompt,
             user_info,
             self._audio_format,
-            tool_names,
+            tool_configuration,
         )
         self._sampling_rate = 24000 if self._audio_format == "pcm16" else 8000
         self._bytes_per_sample = 2 if self._audio_format == "pcm16" else 1
