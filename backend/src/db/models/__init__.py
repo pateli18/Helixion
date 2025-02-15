@@ -1,4 +1,9 @@
-from .Agent import AgentDocumentModel, AgentModel, DocumentModel
+from .Agent import (
+    AgentDocumentModel,
+    AgentModel,
+    AgentPhoneNumberModel,
+    DocumentModel,
+)
 from .Analytics import (
     AnalyticsReportModel,
     AnalyticsTagGroupModel,
@@ -21,4 +26,5 @@ __all__ = [
     "AnalyticsTagModel",
     "TextMessageEventModel",
     "TextMessageModel",
+    "AgentPhoneNumberModel",
 ]

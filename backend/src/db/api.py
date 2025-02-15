@@ -63,7 +63,11 @@ async def get_phone_call(
     result = await db.execute(
         select(PhoneCallModel)
         .options(selectinload(PhoneCallModel.events))
-        .options(joinedload(PhoneCallModel.agent))
+        .options(
+            joinedload(PhoneCallModel.agent).selectinload(
+                AgentModel.phone_numbers
+            )
+        )
         .where(PhoneCallModel.id == phone_call_id)
     )
     return result.scalar_one_or_none()
@@ -114,7 +118,11 @@ async def get_phone_calls(
     result = await db.execute(
         select(PhoneCallModel)
         .options(selectinload(PhoneCallModel.events))
-        .options(joinedload(PhoneCallModel.agent))
+        .options(
+            joinedload(PhoneCallModel.agent).selectinload(
+                AgentModel.phone_numbers
+            )
+        )
         .where(PhoneCallModel.organization_id == organization_id)
         .order_by(PhoneCallModel.created_at.desc())
     )

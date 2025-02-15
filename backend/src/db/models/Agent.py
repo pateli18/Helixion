@@ -34,6 +34,11 @@ class AgentModel(Base, TimestampMixin):
         primaryjoin="foreign(AgentDocumentModel.base_agent_id) == AgentModel.base_id",
     )
     user = relationship("UserModel")
+    phone_numbers = relationship(
+        "AgentPhoneNumberModel",
+        back_populates="agents",
+        primaryjoin="foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id",
+    )
 
 
 class DocumentModel(Base, TimestampMixin):
@@ -69,3 +74,21 @@ class AgentDocumentModel(Base, TimestampMixin):
         primaryjoin="foreign(AgentDocumentModel.base_agent_id) == AgentModel.base_id",
     )
     document = relationship("DocumentModel", back_populates="agents")
+
+
+class AgentPhoneNumberModel(Base, TimestampMixin):
+    __tablename__ = "agent_phone_number"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    base_agent_id = Column(UUID(as_uuid=True), nullable=False)
+    phone_number = Column(VARCHAR, nullable=False)
+
+    agents = relationship(
+        "AgentModel",
+        back_populates="documents",
+        primaryjoin="foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id",
+    )
