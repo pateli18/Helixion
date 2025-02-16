@@ -297,8 +297,9 @@ const ToolConfigurationDialog = (props: {
   existingToolConfiguration: Record<string, any>;
   successCallback: (toolConfiguration: Record<string, any>) => void;
 }) => {
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm">Actions</Button>
       </DialogTrigger>
@@ -309,7 +310,13 @@ const ToolConfigurationDialog = (props: {
             Select the actions that the agent can perform.
           </DialogDescription>
         </DialogHeader>
-        <ToolConfigurationForm {...props} />
+        <ToolConfigurationForm
+          {...props}
+          successCallback={(toolConfiguration) => {
+            props.successCallback(toolConfiguration);
+            setOpen(false);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
