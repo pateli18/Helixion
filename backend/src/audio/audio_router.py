@@ -25,6 +25,7 @@ from src.helixion_types import (
 from src.settings import settings
 from src.twilio_utils import (
     hang_up_phone_call,
+    send_digits,
     send_text_message,
     transfer_call,
 )
@@ -187,6 +188,9 @@ class CallRouter:
                         await self._transfer_call(
                             arguments["phone_number_label"]
                         )
+                    elif message["name"] == "enter_keypad":
+                        arguments = json.loads(message["arguments"])
+                        send_digits(self.call_sid, arguments["digits"])
                     else:
                         logger.warning(
                             f"Received unexpected function call: {message['name']}"
@@ -447,6 +451,17 @@ class BrowserRouter:
                         arguments = json.loads(message["arguments"])
                         await self._transfer_call(
                             arguments["phone_number_label"], websocket
+                        )
+                    elif message["name"] == "enter_keypad":
+                        arguments = json.loads(message["arguments"])
+                        await websocket.send_json(
+                            {
+                                "event": "message",
+                                "payload": {
+                                    "title": "Keypad",
+                                    "body": arguments["digits"],
+                                },
+                            }
                         )
                     else:
                         logger.warning(

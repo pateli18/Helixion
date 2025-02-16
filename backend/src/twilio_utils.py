@@ -23,6 +23,12 @@ def transfer_call(call_sid: str, to_phone_number: str):
     )
 
 
+def send_digits(call_sid: str, digits: str):
+    twilio_client.calls(call_sid).update(
+        twiml=f'<Response><Play digits="{digits}" /></Response>',
+    )
+
+
 def send_text_message(
     to_phone_number: str,
     body: str,

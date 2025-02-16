@@ -58,16 +58,16 @@ query_documents_tool = {
 enter_keypad_tool = {
     "type": "function",
     "name": "enter_keypad",
-    "description": "Enter a set of numbers or characters on the keypad",
+    "description": "Enter a set of digits on the keypad",
     "parameters": {
         "type": "object",
         "properties": {
-            "numbers": {
+            "digits": {
                 "type": "string",
-                "description": "The numbers to enter",
+                "description": "The digits to enter",
             },
         },
-        "required": ["numbers"],
+        "required": ["digits"],
     },
 }
 
