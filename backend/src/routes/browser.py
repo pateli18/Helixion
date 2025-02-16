@@ -114,6 +114,7 @@ async def call_stream(
         audio_format="pcm16",
         start_speaking_buffer_ms=500,
         documents=documents,
+        tool_configuration=phone_call_model.agent.tool_configuration,
     ) as ai:
         call_router = BrowserRouter(
             agent_id=phone_call_model.agent.id,
