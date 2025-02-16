@@ -61,7 +61,7 @@ class TurnDetection(BaseModel):
 
 class ToolNames(str, Enum):
     hang_up = "hang_up"
-    query_documents = "query_documents"
+    query_documents = "knowledge_bases"
     enter_keypad = "enter_keypad"
     transfer_call = "transfer_call_numbers"
     send_text_message = "send_text_message"
@@ -89,7 +89,10 @@ class AiSessionConfiguration(BaseModel):
         tools: list[dict] = []
         if tool_configuration.get(ToolNames.hang_up.value, False):
             tools.extend(hang_up_tools)
-        if tool_configuration.get(ToolNames.query_documents.value, False):
+        if (
+            len(tool_configuration.get(ToolNames.query_documents.value, []))
+            > 0
+        ):
             tools.append(query_documents_tool)
         if tool_configuration.get(ToolNames.enter_keypad.value, False):
             tools.append(enter_keypad_tool)

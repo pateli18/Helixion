@@ -169,7 +169,7 @@ class CallRouter:
                         documents = await query_documents(
                             query,
                             self.ai_caller.tool_configuration.get(
-                                "knowledge_base_ids", []
+                                "knowledge_bases", []
                             ),
                         )
                         await self.ai_caller.receive_tool_call_result(
@@ -429,7 +429,7 @@ class BrowserRouter:
                         documents = await query_documents(
                             query,
                             self.ai_caller.tool_configuration.get(
-                                "knowledge_base_ids", []
+                                "knowledge_bases", []
                             ),
                         )
                         await self.ai_caller.receive_tool_call_result(

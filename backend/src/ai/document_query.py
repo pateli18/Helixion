@@ -102,11 +102,11 @@ async def _model_query_documents(
     return response["choices"][0]["message"]["content"]
 
 
-async def query_documents(
-    query: str, knowledge_base_ids: list[SerializedUUID]
-) -> str:
-    if len(knowledge_base_ids) == 0:
+async def query_documents(query: str, knowledge_bases: list[dict]) -> str:
+    if len(knowledge_bases) == 0:
         return "No documents found"
-    documents = await _get_documents(knowledge_base_ids)
+    documents = await _get_documents(
+        [cast(SerializedUUID, kb["id"]) for kb in knowledge_bases]
+    )
     answer = await _model_query_documents(query, documents)
     return answer
