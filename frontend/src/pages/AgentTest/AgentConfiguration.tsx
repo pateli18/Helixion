@@ -176,7 +176,12 @@ const BaseAgentConfiguration = (props: {
         props.setAgents((prev) => {
           const newAgents = [
             response,
-            ...prev.map((agent) => ({ ...agent, active: false })),
+            ...prev.map((agent) => {
+              if (agent.base_id === response.base_id) {
+                return { ...agent, active: false };
+              }
+              return agent;
+            }),
           ];
           return newAgents;
         });
