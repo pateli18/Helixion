@@ -1,13 +1,13 @@
-from .Agent import (
-    AgentDocumentModel,
-    AgentModel,
-    AgentPhoneNumberModel,
-    DocumentModel,
-)
+from .Agent import AgentModel, AgentPhoneNumberModel
 from .Analytics import (
     AnalyticsReportModel,
     AnalyticsTagGroupModel,
     AnalyticsTagModel,
+)
+from .KnowledgeBase import (
+    DocumentModel,
+    KnowledgeBaseDocumentAssociationModel,
+    KnowledgeBaseModel,
 )
 from .PhoneCall import PhoneCallEventModel, PhoneCallModel
 from .TextMessage import TextMessageEventModel, TextMessageModel
@@ -19,12 +19,13 @@ __all__ = [
     "AgentModel",
     "UserModel",
     "OrganizationModel",
-    "DocumentModel",
-    "AgentDocumentModel",
     "AnalyticsReportModel",
     "AnalyticsTagGroupModel",
     "AnalyticsTagModel",
     "TextMessageEventModel",
     "TextMessageModel",
     "AgentPhoneNumberModel",
+    "DocumentModel",
+    "KnowledgeBaseDocumentAssociationModel",
+    "KnowledgeBaseModel",
 ]

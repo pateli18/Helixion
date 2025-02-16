@@ -224,11 +224,6 @@ TERMINAL_PHONE_CALL_STATUSES = [
 ]
 
 
-class DocumentMetadata(BaseModel):
-    id: SerializedUUID
-    name: str
-
-
 class AgentMetadata(BaseModel):
     base_id: SerializedUUID
     name: str
@@ -306,7 +301,6 @@ class Agent(AgentBase):
 
     id: SerializedUUID
     created_at: SerializedDateTime
-    document_metadata: list[DocumentMetadata]
     test_values: Optional[dict] = None
     user_email: str
     phone_numbers: list[AgentPhoneNumber]
@@ -318,11 +312,19 @@ class AiMessageEventTypes(str, Enum):
     audio = "audio"
 
 
-class Document(BaseModel):
+class DocumentMetadata(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: SerializedUUID
     name: str
-    text: str
+    size: int
+    mime_type: str
+    created_at: SerializedDateTime
+
+
+class KnowledgeBase(BaseModel):
+    id: SerializedUUID
+    name: str
+    documents: list[DocumentMetadata]
 
 
 class AnalyticsTag(BaseModel):

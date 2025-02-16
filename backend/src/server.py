@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from src.audio.sounds import initialize_sounds_cache
 from src.db.base import db_setup, shutdown_session
-from src.routes import agent, analytics, browser, phone, user
+from src.routes import agent, analytics, browser, knowledge_base, phone, user
 from src.settings import settings, setup_logging
 
 setup_logging()
@@ -39,6 +39,7 @@ app.include_router(phone.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
+app.include_router(knowledge_base.router, prefix="/api/v1")
 origins = ["https://app.helixion.ai"]
 app.add_middleware(
     CORSMiddleware,

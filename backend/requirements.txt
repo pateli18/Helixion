@@ -2,12 +2,14 @@ aiobotocore
 aiofiles
 asyncpg
 cachetools
+docx2txt
 fastapi
 httpx
 librosa
 numpy
 propelauth-fastapi
 pydantic-settings
+pymupdf
 python-multipart
 sentry-sdk[fastapi]
 sqlalchemy[asyncio]

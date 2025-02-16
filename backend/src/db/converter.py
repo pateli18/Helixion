@@ -4,6 +4,7 @@ from src.db.models import (
     AgentModel,
     AgentPhoneNumberModel,
     AnalyticsTagGroupModel,
+    KnowledgeBaseModel,
     PhoneCallModel,
 )
 from src.helixion_types import (
@@ -14,6 +15,7 @@ from src.helixion_types import (
     AnalyticsReport,
     AnalyticsTag,
     DocumentMetadata,
+    KnowledgeBase,
     PhoneCallEndReason,
     PhoneCallMetadata,
     PhoneCallStatus,
@@ -91,13 +93,6 @@ def convert_agent_model(agent: AgentModel) -> Agent:
         created_at=agent.created_at,
         system_message=cast(str, agent.system_message),
         active=cast(bool, agent.active),
-        document_metadata=[
-            DocumentMetadata(
-                id=cast(SerializedUUID, document.document.id),
-                name=cast(str, document.document.name),
-            )
-            for document in agent.documents
-        ],
         sample_values=cast(Optional[dict], agent.sample_values) or {},
         user_email=cast(str, agent.user.email),
         tool_configuration=cast(Optional[dict], agent.tool_configuration)
@@ -129,5 +124,18 @@ def convert_analytics_tag_group_model(
                 text=report.text,
             )
             for report in tag_group.reports
+        ],
+    )
+
+
+def convert_knowledge_base_model(
+    knowledge_base: KnowledgeBaseModel,
+) -> KnowledgeBase:
+    return KnowledgeBase(
+        id=cast(SerializedUUID, knowledge_base.id),
+        name=cast(str, knowledge_base.name),
+        documents=[
+            DocumentMetadata.model_validate(document.document)
+            for document in knowledge_base.documents
         ],
     )

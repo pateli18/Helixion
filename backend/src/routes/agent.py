@@ -118,11 +118,17 @@ async def create_agent(
     return response
 
 
+class KnowledgeBaseMetadata(BaseModel):
+    id: SerializedUUID
+    name: str
+
+
 class UpdateToolConfigurationRequest(BaseModel):
     hang_up: bool
     send_text: bool
     transfer_call_numbers: list[TransferCallNumber]
     enter_keypad: bool
+    knowledge_bases: list[KnowledgeBaseMetadata]
 
 
 @router.post(
@@ -149,6 +155,9 @@ async def update_tool_configuration(
             item.model_dump() for item in request.transfer_call_numbers
         ],
         "enter_keypad": request.enter_keypad,
+        "knowledge_bases": [
+            item.model_dump() for item in request.knowledge_bases
+        ],
     }
     await update_agent_tool_configuration(agent_id, tool_configuration, db)
     await db.commit()

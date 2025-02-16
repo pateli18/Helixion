@@ -38,7 +38,6 @@ from src.db.api import (
     check_organization_owns_agent,
     get_agent,
     get_agent_by_incoming_phone_number,
-    get_agent_documents,
     get_phone_call,
     get_phone_calls,
     insert_phone_call,
@@ -58,7 +57,6 @@ from src.helixion_types import (
     TERMINAL_PHONE_CALL_STATUSES,
     AiMessageEventTypes,
     BarHeight,
-    Document,
     PhoneCallEndReason,
     PhoneCallMetadata,
     PhoneCallStatus,
@@ -312,19 +310,12 @@ async def call_stream(
     ):
         raise HTTPException(status_code=400, detail="Phone call not queued")
 
-    document_models = await get_agent_documents(phone_call.agent.base_id, db)
-    documents = [
-        Document.model_validate(document_model)
-        for document_model in document_models
-    ]
-
     async with AiCaller(
         user_info=cast(dict, phone_call.input_data),
         system_prompt=phone_call.agent.system_message,
         phone_call_id=phone_call_id,
         audio_format="g711_ulaw",
         start_speaking_buffer_ms=500,
-        documents=documents,
         tool_configuration=phone_call.agent.tool_configuration,
     ) as ai:
         ai.attach_queue(call_messages[phone_call_id])

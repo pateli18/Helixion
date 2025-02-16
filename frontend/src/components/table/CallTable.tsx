@@ -11,28 +11,7 @@ import { toast } from "sonner";
 import { PhoneCallMetadata, PhoneCallStatus, PhoneCallType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { formatDuration, loadAndFormatDate } from "@/utils/dateFormat";
-
-const ClickToCopy = forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & {
-    text: string;
-  }
->(({ className, text }, ref) => {
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
-  };
-
-  return (
-    <div
-      ref={ref}
-      className={cn("cursor-pointer hover:text-primary", className)}
-      onClick={handleCopy}
-    >
-      {text}
-    </div>
-  );
-});
+import { ClickToCopy } from "../ClickToCopy";
 
 const StatusBadge = (props: { status: PhoneCallStatus }) => {
   let badgeColor;

@@ -40,7 +40,6 @@ from src.db.base import async_session_scope
 from src.helixion_types import (
     AiMessageEventTypes,
     AudioFormat,
-    Document,
     ModelType,
     PhoneCallEndReason,
     SerializedUUID,
@@ -193,7 +192,6 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         phone_call_id: SerializedUUID,
         audio_format: AudioFormat = "g711_ulaw",
         start_speaking_buffer_ms: Optional[int] = None,
-        documents: Optional[list[Document]] = None,
         tool_configuration: Optional[dict] = None,
     ):
         self._exit_stack = AsyncExitStack()
@@ -201,11 +199,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         self._log_file: Optional[str] = None
         self._audio_format = audio_format
 
-        self.documents = documents or []
         self.tool_configuration = tool_configuration or {}
-
-        if len(self.documents) > 0:
-            self.tool_configuration["query_documents"] = {}
         self.session_configuration = AiSessionConfiguration.create(
             system_prompt,
             user_info,

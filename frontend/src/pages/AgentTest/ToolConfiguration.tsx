@@ -13,8 +13,11 @@ import {
 } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { useState } from "react";
-import { updateToolConfiguration } from "@/utils/apiCalls";
+import { useState, useEffect } from "react";
+import {
+  updateToolConfiguration,
+  getAllKnowledgeBases,
+} from "@/utils/apiCalls";
 import { useUserContext } from "@/contexts/UserContext";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import {
@@ -39,12 +42,24 @@ const ToolConfigurationSchema = z.object({
       label: z.string(),
     })
   ),
+  knowledge_base: z.boolean(),
+  knowledge_bases: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+    })
+  ),
   enter_keypad: z.boolean(),
 });
 
 const SwitchField = (props: {
   form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
-  name: "hang_up" | "send_text" | "transfer_call" | "enter_keypad";
+  name:
+    | "hang_up"
+    | "send_text"
+    | "transfer_call"
+    | "enter_keypad"
+    | "knowledge_base";
   label: string;
   description: string;
 }) => {
@@ -145,6 +160,73 @@ const TransferCallNumbers = (props: {
   );
 };
 
+const KnowledgeBases = (props: {
+  form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
+}) => {
+  const { form } = props;
+  const knowledgeBaseEnabled = form.watch("knowledge_base");
+  const { getAccessToken } = useUserContext();
+  const [knowledgeBases, setKnowledgeBases] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const selectedKnowledgeBases = form.watch("knowledge_bases") || [];
+
+  const fetchKnowledgeBases = async () => {
+    const accessToken = await getAccessToken();
+    const response = await getAllKnowledgeBases(accessToken);
+    if (response) {
+      setKnowledgeBases(response);
+    }
+  };
+
+  useEffect(() => {
+    if (knowledgeBaseEnabled) {
+      fetchKnowledgeBases();
+    }
+  }, [knowledgeBaseEnabled]);
+
+  const toggleKnowledgeBase = (kb: { id: string; name: string }) => {
+    const isSelected = selectedKnowledgeBases.some(
+      (selected) => selected.id === kb.id
+    );
+    if (isSelected) {
+      form.setValue(
+        "knowledge_bases",
+        selectedKnowledgeBases.filter((selected) => selected.id !== kb.id)
+      );
+    } else {
+      form.setValue("knowledge_bases", [...selectedKnowledgeBases, kb]);
+    }
+  };
+
+  if (!knowledgeBaseEnabled) return null;
+
+  return (
+    <div className="space-y-4 rounded-lg border p-4">
+      <div className="text-muted-foreground text-xs">
+        Click a knowledge base to select it for use by the agent
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {knowledgeBases.map((kb) => (
+          <Button
+            key={kb.id}
+            type="button"
+            variant={
+              selectedKnowledgeBases.some((selected) => selected.id === kb.id)
+                ? "default"
+                : "outline"
+            }
+            size="sm"
+            onClick={() => toggleKnowledgeBase(kb)}
+          >
+            {kb.name}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const ToolConfigurationForm = (props: {
   successCallback: (toolConfiguration: Record<string, any>) => void;
   existingToolConfiguration: Record<string, any>;
@@ -165,6 +247,12 @@ const ToolConfigurationForm = (props: {
       transfer_call_numbers:
         props.existingToolConfiguration.transfer_call_numbers || [],
       enter_keypad: props.existingToolConfiguration.enter_keypad ?? false,
+      knowledge_base:
+        props.existingToolConfiguration.knowledge_bases &&
+        props.existingToolConfiguration.knowledge_bases.length > 0
+          ? true
+          : false,
+      knowledge_bases: props.existingToolConfiguration.knowledge_bases || [],
     },
   });
 
@@ -177,6 +265,7 @@ const ToolConfigurationForm = (props: {
       data.send_text,
       data.transfer_call ? data.transfer_call_numbers : [],
       data.enter_keypad,
+      data.knowledge_base ? data.knowledge_bases : [],
       accessToken
     );
     if (response !== null) {
@@ -217,6 +306,13 @@ const ToolConfigurationForm = (props: {
             description="The agent can transfer the call to other numbers"
           />
           <TransferCallNumbers form={form} />
+          <SwitchField
+            form={form}
+            name="knowledge_base"
+            label="Knowledge base"
+            description="The agent can use knowledge bases to answer questions"
+          />
+          <KnowledgeBases form={form} />
         </div>
         <Button disabled={submitLoading} type="submit">
           Update{" "}
@@ -239,7 +335,7 @@ const ToolConfigurationDialog = (props: {
       <DialogTrigger asChild>
         <Button size="sm">Actions</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90%] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Action Configuration</DialogTitle>
           <DialogDescription>
@@ -282,6 +378,11 @@ export const ToolConfigurationView = (props: {
         )}
       {props.existingToolConfiguration.enter_keypad && (
         <ToolBadge label="Enter keypad" />
+      )}
+      {props.existingToolConfiguration.knowledge_bases.map(
+        (kb: { id: string; name: string }) => (
+          <ToolBadge key={kb.id} label={kb.name} />
+        )
       )}
     </div>
   );

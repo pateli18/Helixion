@@ -4,6 +4,8 @@ import {
   BarHeight,
   PhoneCallMetadata,
   SpeakerSegment,
+  KnowledgeBase,
+  DocumentMetadata,
 } from "@/types";
 import Ajax from "./Ajax";
 
@@ -284,6 +286,7 @@ export const updateToolConfiguration = async (
   sendText: boolean,
   transferCallNumbers: { phone_number: string; label: string }[],
   enterKeypad: boolean,
+  knowledgeBases: { id: string; name: string }[],
   accessToken: string | null
 ) => {
   let response = null;
@@ -296,7 +299,64 @@ export const updateToolConfiguration = async (
         send_text: sendText,
         transfer_call_numbers: transferCallNumbers,
         enter_keypad: enterKeypad,
+        knowledge_bases: knowledgeBases,
       },
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const getAllKnowledgeBases = async (accessToken: string | null) => {
+  let response = null;
+  try {
+    response = await Ajax.req<KnowledgeBase[]>({
+      url: `${baseUrl}/api/v1/knowledge-base/all`,
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const uploadDocuments = async (
+  files: FileList,
+  knowledgeBaseId: string,
+  accessToken: string | null
+) => {
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append("files", files[i]);
+  }
+
+  let response = null;
+  try {
+    response = await Ajax.req<DocumentMetadata[]>({
+      url: `${baseUrl}/api/v1/knowledge-base/upload/${knowledgeBaseId}`,
+      method: "POST",
+      body: formData,
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const createKnowledgeBase = async (
+  name: string,
+  accessToken: string | null
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<KnowledgeBase>({
+      url: `${baseUrl}/api/v1/knowledge-base/create`,
+      method: "POST",
+      body: { name },
       accessToken,
     });
   } catch (error) {

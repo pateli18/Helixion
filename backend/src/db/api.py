@@ -6,12 +6,13 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
 from src.db.models import (
-    AgentDocumentModel,
     AgentModel,
     AgentPhoneNumberModel,
     AnalyticsReportModel,
     AnalyticsTagGroupModel,
     DocumentModel,
+    KnowledgeBaseDocumentAssociationModel,
+    KnowledgeBaseModel,
     OrganizationModel,
     PhoneCallEventModel,
     PhoneCallModel,
@@ -158,14 +159,6 @@ async def insert_agent(
 def _base_agent_query() -> Select:
     return (
         select(AgentModel)
-        .options(
-            selectinload(AgentModel.documents)
-            .joinedload(AgentDocumentModel.document)
-            .load_only(
-                DocumentModel.id,  # type: ignore
-                DocumentModel.name,  # type: ignore
-            )
-        )
         .options(selectinload(AgentModel.phone_numbers))
         .options(selectinload(AgentModel.user))
     )
@@ -197,15 +190,8 @@ async def get_agents(
 ) -> list[AgentModel]:
     result = await db.execute(
         select(AgentModel)
-        .options(
-            selectinload(AgentModel.documents)
-            .joinedload(AgentDocumentModel.document)
-            .load_only(
-                DocumentModel.id,  # type: ignore
-                DocumentModel.name,  # type: ignore
-            )
-        )
         .options(selectinload(AgentModel.user))
+        .options(selectinload(AgentModel.phone_numbers))
         .where(AgentModel.organization_id == organization_id)
         .order_by(AgentModel.created_at.desc())
     )
@@ -247,18 +233,6 @@ async def insert_organization(
     await db.execute(
         insert(OrganizationModel).values(id=organization_id, name=name)
     )
-
-
-async def get_agent_documents(
-    base_agent_id: SerializedUUID, db: async_scoped_session
-) -> list[DocumentModel]:
-    result = await db.execute(
-        select(DocumentModel)
-        .join(AgentDocumentModel)
-        .where(AgentDocumentModel.base_agent_id == base_agent_id)
-        .where(DocumentModel.id == AgentDocumentModel.document_id)
-    )
-    return list(result.scalars().all())
 
 
 async def check_organization_owns_agent(
@@ -368,3 +342,95 @@ async def insert_text_message(
             organization_id=organization_id,
         )
     )
+
+
+async def get_knowledge_base(
+    knowledge_base_id: SerializedUUID,
+    db: async_scoped_session,
+) -> Optional[KnowledgeBaseModel]:
+    result = await db.execute(
+        select(KnowledgeBaseModel).where(
+            KnowledgeBaseModel.id == knowledge_base_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_knowledge_bases(
+    organization_id: str,
+    db: async_scoped_session,
+) -> list[KnowledgeBaseModel]:
+    result = await db.execute(
+        select(KnowledgeBaseModel)
+        .options(
+            selectinload(KnowledgeBaseModel.documents)
+            .joinedload(
+                KnowledgeBaseDocumentAssociationModel.document,
+            )
+            .load_only(
+                DocumentModel.id,  # type: ignore
+                DocumentModel.name,  # type: ignore
+                DocumentModel.mime_type,  # type: ignore
+                DocumentModel.size,  # type: ignore
+            )
+        )
+        .where(KnowledgeBaseModel.organization_id == organization_id)
+    )
+    return list(result.scalars())
+
+
+async def insert_document(
+    name: str,
+    text: str,
+    mime_type: str,
+    size: int,
+    storage_path: str,
+    organization_id: str,
+    db: async_scoped_session,
+) -> DocumentModel:
+    result = await db.execute(
+        insert(DocumentModel)
+        .returning(DocumentModel)
+        .values(
+            name=name,
+            text=text,
+            mime_type=mime_type,
+            size=size,
+            storage_path=storage_path,
+            organization_id=organization_id,
+        )
+    )
+    return result.scalar_one()
+
+
+async def get_documents_from_knowledge_bases(
+    knowledge_base_ids: list[SerializedUUID],
+    db: async_scoped_session,
+) -> list[DocumentModel]:
+    result = await db.execute(
+        select(DocumentModel)
+        .options(selectinload(DocumentModel.knowledge_bases))
+        .join(KnowledgeBaseDocumentAssociationModel)
+        .where(
+            KnowledgeBaseDocumentAssociationModel.knowledge_base_id.in_(
+                knowledge_base_ids
+            )
+        )
+    )
+    return list(result.scalars())
+
+
+async def create_knowledge_base(
+    name: str,
+    organization_id: str,
+    db: async_scoped_session,
+) -> SerializedUUID:
+    result = await db.execute(
+        insert(KnowledgeBaseModel)
+        .returning(KnowledgeBaseModel.id)
+        .values(
+            name=name,
+            organization_id=organization_id,
+        )
+    )
+    return result.scalar_one()

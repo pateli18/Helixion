@@ -253,28 +253,6 @@ const BaseAgentConfiguration = (props: {
         />
       </div>
       <div className="flex items-center gap-2">
-        <div className="font-bold text-sm">Name</div>
-        <Input
-          placeholder="Enter Agent Name"
-          value={(newVersion?.name ?? props.activeAgent?.name) || ""}
-          onChange={(e) => {
-            setNewVersion((prev) => {
-              if (prev) {
-                return {
-                  ...prev,
-                  name: e.target.value,
-                };
-              }
-              return {
-                ...props.activeAgent!,
-                name: e.target.value,
-              };
-            });
-          }}
-          disabled={props.activeAgent === undefined}
-        />
-      </div>
-      <div className="flex items-center gap-2">
         <div className="font-bold text-sm">Instructions</div>
         <div className="flex items-center gap-2 ml-auto">
           {props.activeAgent?.active ? (

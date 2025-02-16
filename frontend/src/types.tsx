@@ -51,15 +51,9 @@ export type Agent = {
   base_id: string;
   active: boolean;
   created_at: string;
-  document_metadata: DocumentMetadata[];
   sample_values: Record<string, string>;
   user_email: string;
   tool_configuration: Record<string, any>;
-};
-
-export type DocumentMetadata = {
-  id: string;
-  name: string;
 };
 
 export type AnalyticsTag = {
@@ -79,4 +73,18 @@ export type AnalyticsGroup = {
   name: string;
   tags: AnalyticsTag[];
   reports: AnalyticsReport[];
+};
+
+export type DocumentMetadata = {
+  id: string;
+  name: string;
+  size: number;
+  mime_type: string;
+  created_at: string;
+};
+
+export type KnowledgeBase = {
+  id: string;
+  name: string;
+  documents: DocumentMetadata[];
 };

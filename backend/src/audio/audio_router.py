@@ -167,7 +167,10 @@ class CallRouter:
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]
                         documents = await query_documents(
-                            query, self.ai_caller.documents
+                            query,
+                            self.ai_caller.tool_configuration.get(
+                                "knowledge_base_ids", []
+                            ),
                         )
                         await self.ai_caller.receive_tool_call_result(
                             message["item_id"],
@@ -424,7 +427,10 @@ class BrowserRouter:
                         arguments = json.loads(message["arguments"])
                         query = arguments["query"]
                         documents = await query_documents(
-                            query, self.ai_caller.documents
+                            query,
+                            self.ai_caller.tool_configuration.get(
+                                "knowledge_base_ids", []
+                            ),
                         )
                         await self.ai_caller.receive_tool_call_result(
                             message["item_id"],
