@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from sqlalchemy import Select, distinct, insert, select, update
+from sqlalchemy import Select, insert, select, update
 from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -422,7 +422,8 @@ async def get_documents_from_knowledge_bases(
     db: async_scoped_session,
 ) -> list[DocumentModel]:
     result = await db.execute(
-        select(distinct(DocumentModel))
+        select(DocumentModel)
+        .distinct()
         .options(selectinload(DocumentModel.knowledge_bases))
         .join(KnowledgeBaseDocumentAssociationModel)
         .where(

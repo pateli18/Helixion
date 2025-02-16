@@ -64,7 +64,7 @@ class ToolNames(str, Enum):
     query_documents = "knowledge_bases"
     enter_keypad = "enter_keypad"
     transfer_call = "transfer_call_numbers"
-    send_text_message = "send_text_message"
+    send_text_message = "send_text"
 
 
 class AiSessionConfiguration(BaseModel):

@@ -396,16 +396,21 @@ const BaseAgentConfiguration = (props: {
       {props.activeAgent && (
         <ToolConfigurationView
           agentId={props.activeAgent.id}
-          existingToolConfiguration={props.activeAgent.tool_configuration}
+          existingToolConfiguration={
+            newVersion?.tool_configuration ??
+            props.activeAgent.tool_configuration ??
+            {}
+          }
           successCallback={(toolConfiguration) => {
-            props.setAgents((prev) => {
-              const newAgents = prev.map((agent) => {
-                if (agent.id === props.activeAgent?.id) {
-                  return { ...agent, tool_configuration: toolConfiguration };
-                }
-                return agent;
-              });
-              return newAgents;
+            setNewVersion((prev) => {
+              if (prev) {
+                return { ...prev, tool_configuration: toolConfiguration };
+              } else {
+                return {
+                  ...props.activeAgent!,
+                  tool_configuration: toolConfiguration,
+                };
+              }
             });
           }}
         />

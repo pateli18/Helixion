@@ -220,12 +220,10 @@ const ToolConfigurationForm = (props: {
   existingToolConfiguration: Record<string, any>;
   agentId: string;
 }) => {
-  const { getAccessToken } = useUserContext();
-  const [submitLoading, setSubmitLoading] = useState(false);
   const form = useForm<z.infer<typeof ToolConfigurationSchema>>({
     resolver: zodResolver(ToolConfigurationSchema),
     defaultValues: {
-      hang_up: props.existingToolConfiguration.hang_up,
+      hang_up: props.existingToolConfiguration.hang_up ?? false,
       send_text: props.existingToolConfiguration.send_text ?? false,
       transfer_call:
         props.existingToolConfiguration.transfer_call_numbers &&
@@ -245,24 +243,8 @@ const ToolConfigurationForm = (props: {
   });
 
   const onSubmit = async (data: z.infer<typeof ToolConfigurationSchema>) => {
-    setSubmitLoading(true);
-    const accessToken = await getAccessToken();
-    const response = await updateToolConfiguration(
-      props.agentId,
-      data.hang_up,
-      data.send_text,
-      data.transfer_call ? data.transfer_call_numbers : [],
-      data.enter_keypad,
-      data.knowledge_base ? data.knowledge_bases : [],
-      accessToken
-    );
-    if (response !== null) {
-      props.successCallback(response);
-      toast.success("Tool configuration updated");
-    } else {
-      toast.error("Failed to update tool configuration");
-    }
-    setSubmitLoading(false);
+    props.successCallback(data);
+    toast.success("Tool configuration updated");
   };
 
   return (
@@ -304,12 +286,7 @@ const ToolConfigurationForm = (props: {
             <KnowledgeBases form={form} />
           </SwitchField>
         </div>
-        <Button disabled={submitLoading} type="submit">
-          Update{" "}
-          {submitLoading && (
-            <ReloadIcon className="ml-2 h-4 w-4 animate-spin" />
-          )}
-        </Button>
+        <Button type="submit">Update</Button>
       </form>
     </Form>
   );
@@ -369,11 +346,12 @@ export const ToolConfigurationView = (props: {
       {props.existingToolConfiguration.enter_keypad && (
         <ToolBadge label="Enter keypad" />
       )}
-      {props.existingToolConfiguration.knowledge_bases.map(
-        (kb: { id: string; name: string }) => (
-          <ToolBadge key={kb.id} label={kb.name} />
-        )
-      )}
+      {props.existingToolConfiguration.knowledge_bases &&
+        props.existingToolConfiguration.knowledge_bases.map(
+          (kb: { id: string; name: string }) => (
+            <ToolBadge key={kb.id} label={kb.name} />
+          )
+        )}
     </div>
   );
 };
