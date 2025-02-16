@@ -31,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, TrashIcon } from "@radix-ui/react-icons";
+import { MultiSelectControl } from "@/components/ui/MultiSelectControl";
 
 const ToolConfigurationSchema = z.object({
   hang_up: z.boolean(),
@@ -62,43 +63,45 @@ const SwitchField = (props: {
     | "knowledge_base";
   label: string;
   description: string;
+  children?: React.ReactNode;
 }) => {
-  const { form, name, label, description } = props;
   return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-          <div className="space-y-0.5">
-            <FormLabel>{label}</FormLabel>
-            <FormDescription>{description}</FormDescription>
-          </div>
-          <FormControl>
-            <Switch checked={field.value} onCheckedChange={field.onChange} />
-          </FormControl>
-        </FormItem>
-      )}
-    />
+    <div className="space-y-4 rounded-lg border p-3 shadow-sm">
+      <FormField
+        control={props.form.control}
+        name={props.name}
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-center justify-between">
+            <div className="space-y-0.5">
+              <FormLabel>{props.label}</FormLabel>
+              <FormDescription>{props.description}</FormDescription>
+            </div>
+            <FormControl>
+              <Switch checked={field.value} onCheckedChange={field.onChange} />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      {props.children}
+    </div>
   );
 };
 
 const TransferCallNumbers = (props: {
   form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
 }) => {
-  const { form } = props;
-  const numbers = form.watch("transfer_call_numbers");
-  const transferEnabled = form.watch("transfer_call");
+  const numbers = props.form.watch("transfer_call_numbers");
+  const transferEnabled = props.form.watch("transfer_call");
 
   const addNumber = () => {
-    form.setValue("transfer_call_numbers", [
+    props.form.setValue("transfer_call_numbers", [
       ...numbers,
       { phone_number: "", label: "" },
     ]);
   };
 
   const removeNumber = (index: number) => {
-    form.setValue(
+    props.form.setValue(
       "transfer_call_numbers",
       numbers.filter((_, i) => i !== index)
     );
@@ -111,7 +114,7 @@ const TransferCallNumbers = (props: {
       {numbers.map((_, index) => (
         <div key={index} className="flex gap-4 items-start">
           <FormField
-            control={form.control}
+            control={props.form.control}
             name={`transfer_call_numbers.${index}.label`}
             render={({ field }) => (
               <FormItem className="flex-1">
@@ -123,7 +126,7 @@ const TransferCallNumbers = (props: {
             )}
           />
           <FormField
-            control={form.control}
+            control={props.form.control}
             name={`transfer_call_numbers.${index}.phone_number`}
             render={({ field }) => (
               <FormItem className="flex-1">
@@ -163,13 +166,12 @@ const TransferCallNumbers = (props: {
 const KnowledgeBases = (props: {
   form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
 }) => {
-  const { form } = props;
-  const knowledgeBaseEnabled = form.watch("knowledge_base");
+  const knowledgeBaseEnabled = props.form.watch("knowledge_base");
   const { getAccessToken } = useUserContext();
   const [knowledgeBases, setKnowledgeBases] = useState<
     { id: string; name: string }[]
   >([]);
-  const selectedKnowledgeBases = form.watch("knowledge_bases") || [];
+  const selectedKnowledgeBases = props.form.watch("knowledge_bases") || [];
 
   const fetchKnowledgeBases = async () => {
     const accessToken = await getAccessToken();
@@ -185,44 +187,30 @@ const KnowledgeBases = (props: {
     }
   }, [knowledgeBaseEnabled]);
 
-  const toggleKnowledgeBase = (kb: { id: string; name: string }) => {
-    const isSelected = selectedKnowledgeBases.some(
-      (selected) => selected.id === kb.id
-    );
-    if (isSelected) {
-      form.setValue(
-        "knowledge_bases",
-        selectedKnowledgeBases.filter((selected) => selected.id !== kb.id)
-      );
-    } else {
-      form.setValue("knowledge_bases", [...selectedKnowledgeBases, kb]);
-    }
-  };
-
   if (!knowledgeBaseEnabled) return null;
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
-      <div className="text-muted-foreground text-xs">
-        Click a knowledge base to select it for use by the agent
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {knowledgeBases.map((kb) => (
-          <Button
-            key={kb.id}
-            type="button"
-            variant={
-              selectedKnowledgeBases.some((selected) => selected.id === kb.id)
-                ? "default"
-                : "outline"
-            }
-            size="sm"
-            onClick={() => toggleKnowledgeBase(kb)}
-          >
-            {kb.name}
-          </Button>
-        ))}
-      </div>
+    <div className="flex justify-between items-center">
+      <MultiSelectControl
+        title="Knowledge Bases"
+        items={knowledgeBases}
+        selectedItems={selectedKnowledgeBases}
+        selectItem={(item, isSelected) =>
+          props.form.setValue(
+            "knowledge_bases",
+            isSelected
+              ? [...selectedKnowledgeBases, item]
+              : selectedKnowledgeBases.filter((kb) => kb.id !== item.id)
+          )
+        }
+        selectAll={() => props.form.setValue("knowledge_bases", knowledgeBases)}
+        clearSelectedItems={() => props.form.setValue("knowledge_bases", [])}
+      />
+      <a href="/knowledge-bases" target="_blank">
+        <Button type="button" variant="outline" size="sm">
+          <PlusIcon className="h-4 w-4 mr-2" /> Add New
+        </Button>
+      </a>
     </div>
   );
 };
@@ -284,35 +272,37 @@ const ToolConfigurationForm = (props: {
           <SwitchField
             form={form}
             name="hang_up"
-            label="Hang up"
+            label="Hang Up"
             description="The agent can hang up the call"
           />
           <SwitchField
             form={form}
             name="send_text"
-            label="Send text"
+            label="Send Text"
             description="The agent can send a text message to the caller"
           />
           <SwitchField
             form={form}
             name="enter_keypad"
-            label="Enter keypad"
+            label="Enter Keypad"
             description="The agent can enter numbers on the phone keypad"
           />
           <SwitchField
             form={form}
             name="transfer_call"
-            label="Transfer call"
+            label="Transfer Call"
             description="The agent can transfer the call to other numbers"
-          />
-          <TransferCallNumbers form={form} />
+          >
+            <TransferCallNumbers form={form} />
+          </SwitchField>
           <SwitchField
             form={form}
             name="knowledge_base"
-            label="Knowledge base"
+            label="Knowledge Base"
             description="The agent can use knowledge bases to answer questions"
-          />
-          <KnowledgeBases form={form} />
+          >
+            <KnowledgeBases form={form} />
+          </SwitchField>
         </div>
         <Button disabled={submitLoading} type="submit">
           Update{" "}

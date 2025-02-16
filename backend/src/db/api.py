@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from sqlalchemy import Select, insert, select, update
+from sqlalchemy import Select, distinct, insert, select, update
 from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -372,6 +372,7 @@ async def get_knowledge_bases(
                 DocumentModel.name,  # type: ignore
                 DocumentModel.mime_type,  # type: ignore
                 DocumentModel.size,  # type: ignore
+                DocumentModel.created_at,  # type: ignore
             )
         )
         .where(KnowledgeBaseModel.organization_id == organization_id)
@@ -403,12 +404,25 @@ async def insert_document(
     return result.scalar_one()
 
 
+async def insert_document_knowledge_base_association(
+    document_id: SerializedUUID,
+    knowledge_base_id: SerializedUUID,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        insert(KnowledgeBaseDocumentAssociationModel).values(
+            document_id=document_id,
+            knowledge_base_id=knowledge_base_id,
+        )
+    )
+
+
 async def get_documents_from_knowledge_bases(
     knowledge_base_ids: list[SerializedUUID],
     db: async_scoped_session,
 ) -> list[DocumentModel]:
     result = await db.execute(
-        select(DocumentModel)
+        select(distinct(DocumentModel))
         .options(selectinload(DocumentModel.knowledge_bases))
         .join(KnowledgeBaseDocumentAssociationModel)
         .where(

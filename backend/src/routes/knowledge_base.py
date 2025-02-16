@@ -16,6 +16,7 @@ from src.db.api import (
     get_knowledge_base,
     get_knowledge_bases,
     insert_document,
+    insert_document_knowledge_base_association,
 )
 from src.db.base import get_session
 from src.db.converter import convert_knowledge_base_model
@@ -98,6 +99,11 @@ async def upload_documents(
             size=len(data),
             storage_path=_doc_save_path(str(user.active_org_id), filename),
             organization_id=str(user.active_org_id),
+            db=db,
+        )
+        await insert_document_knowledge_base_association(
+            document_id=cast(SerializedUUID, document_model.id),
+            knowledge_base_id=knowledge_base_id,
             db=db,
         )
         documents.append(DocumentMetadata.model_validate(document_model))

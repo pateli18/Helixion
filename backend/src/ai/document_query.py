@@ -14,53 +14,30 @@ from src.helixion_types import (
     SerializedUUID,
 )
 
-document_cache: LRUCache[
-    SerializedUUID, list[tuple[SerializedUUID, str, str]]
-] = LRUCache(maxsize=100)
+document_cache: LRUCache[str, list[tuple[str, str]]] = LRUCache(maxsize=10)
 document_cache_lock = asyncio.Lock()
 
 
 async def _get_documents(
     knowledge_base_ids: list[SerializedUUID],
 ) -> list[tuple[str, str]]:
-    docs: list[tuple[str, str]] = []
-    seen_docs: set[SerializedUUID] = set()
-    knowledge_bases_to_query = []
-    for knowledge_base_id in knowledge_base_ids:
-        if knowledge_base_id in document_cache:
-            for doc_id, doc_name, doc_text in document_cache[
-                knowledge_base_id
-            ]:
-                if doc_id not in seen_docs:
-                    docs.append((doc_name, doc_text))
-                    seen_docs.add(doc_id)
-        else:
-            knowledge_bases_to_query.append(knowledge_base_id)
-
-    if len(knowledge_bases_to_query) > 0:
+    document_cache_key = "-".join(
+        sorted([str(kb_id) for kb_id in knowledge_base_ids])
+    )
+    if document_cache_key not in document_cache:
         async with async_session_scope() as db:
-            documents = await get_documents_from_knowledge_bases(
+            document_models = await get_documents_from_knowledge_bases(
                 knowledge_base_ids, db
             )
-            for document in documents:
-                knowledge_base_id = cast(
-                    SerializedUUID, document.knowledge_bases.knowledge_base_id
-                )
-
-                async with document_cache_lock:
-                    if knowledge_base_id not in document_cache:
-                        document_cache[knowledge_base_id] = []
-                    doc_id = cast(SerializedUUID, document.id)
-                    doc_name = cast(str, document.name)
-                    doc_text = cast(str, document.text)
-                    document_cache[knowledge_base_id].append(
-                        (doc_id, doc_name, doc_text)
+            async with document_cache_lock:
+                document_cache[document_cache_key] = [
+                    (
+                        cast(str, document_model.name),
+                        cast(str, document_model.text),
                     )
-                    if doc_id not in seen_docs:
-                        docs.append((doc_name, doc_text))
-                        seen_docs.add(doc_id)
-
-    return docs
+                    for document_model in document_models
+                ]
+    return document_cache[document_cache_key]
 
 
 async def _model_query_documents(
