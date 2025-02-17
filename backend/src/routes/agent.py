@@ -415,7 +415,7 @@ async def assign_multiple_phone_numbers(
         )
         update_call_webhook_url(
             phone_number_sid,
-            None,
+            "",
         )
 
     for phone_number in request.phone_numbers:
