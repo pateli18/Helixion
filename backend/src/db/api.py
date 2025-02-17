@@ -185,19 +185,6 @@ async def get_active_agent(
     return result.scalar_one_or_none()
 
 
-async def get_agent_by_incoming_phone_number(
-    incoming_phone_number: str,
-    db: async_scoped_session,
-) -> Optional[AgentModel]:
-    query = _base_agent_query()
-    result = await db.execute(
-        query.join(AgentPhoneNumberModel)
-        .where(AgentPhoneNumberModel.phone_number == incoming_phone_number)
-        .where(AgentPhoneNumberModel.incoming == True)  # noqa E712
-    )
-    return result.scalar_one_or_none()
-
-
 async def get_agents(
     organization_id: str, db: async_scoped_session
 ) -> list[AgentModel]:
@@ -466,13 +453,18 @@ async def create_knowledge_base(
 
 async def insert_phone_number(
     phone_number: str,
+    phone_number_sid: str,
     organization_id: str,
     db: async_scoped_session,
 ) -> AgentPhoneNumberModel:
     result = await db.execute(
         insert(AgentPhoneNumberModel)
         .returning(AgentPhoneNumberModel)
-        .values(phone_number=phone_number, organization_id=organization_id)
+        .values(
+            phone_number=phone_number,
+            phone_number_sid=phone_number_sid,
+            organization_id=organization_id,
+        )
     )
     return result.scalar_one()
 
@@ -540,3 +532,30 @@ async def get_available_phone_numbers(
         .where(AgentPhoneNumberModel.organization_id == organization_id)
     )
     return list(result.scalars())
+
+
+async def get_phone_number(
+    phone_number_id: SerializedUUID,
+    db: async_scoped_session,
+) -> Optional[AgentPhoneNumberModel]:
+    result = await db.execute(
+        select(AgentPhoneNumberModel)
+        .options(selectinload(AgentPhoneNumberModel.agent))
+        .where(AgentPhoneNumberModel.id == phone_number_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_phone_number_sid_map(
+    organization_id: str,
+    db: async_scoped_session,
+) -> dict[SerializedUUID, str]:
+    result = await db.execute(
+        select(
+            AgentPhoneNumberModel.phone_number_sid, AgentPhoneNumberModel.id
+        ).where(AgentPhoneNumberModel.organization_id == organization_id)
+    )
+    return {
+        phone_number_id: phone_number_sid
+        for phone_number_sid, phone_number_id in result
+    }

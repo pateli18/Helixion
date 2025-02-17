@@ -57,5 +57,22 @@ def available_phone_numbers(country_code: str, area_code: int) -> list[str]:
     ]
 
 
-def buy_phone_number(phone_number: str):
-    twilio_client.incoming_phone_numbers.create(phone_number=phone_number)
+def buy_phone_number(phone_number: str) -> Optional[str]:
+    response = twilio_client.incoming_phone_numbers.create(
+        phone_number=phone_number
+    )
+    return response.sid
+
+
+def update_call_webhook_url(phone_number_sid: str, webhook_url: Optional[str]):
+    twilio_client.incoming_phone_numbers(phone_number_sid).update(
+        voice_url=webhook_url,
+    )
+
+
+def update_message_webhook_url(
+    phone_number_sid: str, webhook_url: Optional[str]
+):
+    twilio_client.incoming_phone_numbers(phone_number_sid).update(
+        sms_url=webhook_url,
+    )

@@ -7,7 +7,7 @@ import {
   buyPhoneNumber,
   getAllPhoneNumbers,
   getAgentMetadata,
-  assignPhoneNumberToAgent,
+  assignMultiplePhoneNumbersToAgent,
 } from "@/utils/apiCalls";
 import { AgentMetadata, AgentPhoneNumber } from "@/types";
 import { ColumnDef } from "@tanstack/react-table";
@@ -141,14 +141,21 @@ const PhoneNumberTable = (props: {
   // Assign phone number to agents
   const handleAssignNumber = async (
     phoneNumberId: string,
+    phoneNumber: string,
     agentId: string,
     incoming: boolean
   ) => {
     const accessToken = await getAccessToken();
-    const response = await assignPhoneNumberToAgent(
-      phoneNumberId,
+    const response = await assignMultiplePhoneNumbersToAgent(
+      [
+        {
+          id: phoneNumberId,
+          incoming: incoming,
+          phone_number: phoneNumber,
+          agent: null,
+        },
+      ],
       agentId,
-      incoming,
       accessToken
     );
     if (response) {
@@ -190,7 +197,12 @@ const PhoneNumberTable = (props: {
         }
 
         const onSelectChange = (value: string) => {
-          handleAssignNumber(row.original.id, value, row.original.incoming);
+          handleAssignNumber(
+            row.original.id,
+            row.original.phone_number,
+            value,
+            row.original.incoming
+          );
         };
 
         return (
@@ -225,6 +237,7 @@ const PhoneNumberTable = (props: {
             onCheckedChange={(checked) => {
               handleAssignNumber(
                 row.original.id,
+                row.original.phone_number,
                 agentMetadata.base_id,
                 checked
               );

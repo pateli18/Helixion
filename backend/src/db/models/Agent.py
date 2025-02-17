@@ -44,6 +44,7 @@ class AgentPhoneNumberModel(Base, TimestampMixin):
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
+    phone_number_sid = Column(VARCHAR, nullable=False)
     base_agent_id = Column(UUID(as_uuid=True), nullable=True)
     phone_number = Column(VARCHAR, nullable=False)
     incoming = Column(Boolean, nullable=False)

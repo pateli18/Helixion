@@ -37,9 +37,9 @@ from src.aws_utils import S3Client
 from src.db.api import (
     check_organization_owns_agent,
     get_agent,
-    get_agent_by_incoming_phone_number,
     get_phone_call,
     get_phone_calls,
+    get_phone_number,
     insert_phone_call,
     insert_phone_call_event,
     insert_text_message,
@@ -145,41 +145,47 @@ async def text_message_status_webhook(
 
 
 @router.post(
-    "/inbound-message",
+    "/inbound-message/{phone_number_id}",
     status_code=204,
 )
 async def inbound_message(
+    phone_number_id: SerializedUUID,
     payload: dict = Depends(_validate_twilio_request),
     db: async_scoped_session = Depends(get_session),
 ):
+    phone_number = await get_phone_number(phone_number_id, db)
     to_number = payload["To"]
-    agent = await get_agent_by_incoming_phone_number(to_number, db)
-    if agent is None:
-        logger.exception(f"Agent not found for phone number {to_number}")
+    if phone_number is None or phone_number.phone_number != to_number:
+        logger.exception(
+            f"Phone number not found for phone number {phone_number_id}"
+        )
         return Response(status_code=204)
     await insert_text_message(
-        cast(SerializedUUID, agent.id),
+        cast(SerializedUUID, phone_number.agent.id),
         payload["From"],
         to_number,
         payload["Body"],
         TextMessageType.inbound,
         payload["MessageSid"],
         "texter",
-        cast(str, agent.organization_id),
+        cast(str, phone_number.organization_id),
         db,
     )
     return Response(status_code=204)
 
 
-@router.post("/inbound-call")
+@router.post("/inbound-call/{phone_number_id}")
 async def inbound_call(
+    phone_number_id: SerializedUUID,
     payload: dict = Depends(_validate_twilio_request),
     db: async_scoped_session = Depends(get_session),
 ):
+    phone_number = await get_phone_number(phone_number_id, db)
     to_number = payload["To"]
-    agent = await get_agent_by_incoming_phone_number(to_number, db)
+    if phone_number is None or phone_number.phone_number != to_number:
+        raise HTTPException(status_code=404, detail="Phone number not found")
     voice_response = VoiceResponse()
-    if agent is None:
+    if phone_number.agent is None:
         voice_response.say(
             "We're sorry, but this number only makes outbound calls. Goodbye!"
         )
@@ -193,9 +199,9 @@ async def inbound_call(
             {},
             payload["From"],
             to_number,
-            cast(SerializedUUID, agent.id),
+            cast(SerializedUUID, phone_number.agent.id),
             PhoneCallType.inbound,
-            cast(str, agent.organization_id),
+            cast(str, phone_number.organization_id),
             db,
         )
         await insert_phone_call_event(

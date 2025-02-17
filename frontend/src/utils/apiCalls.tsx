@@ -417,31 +417,6 @@ export const buyPhoneNumber = async (
   return response;
 };
 
-export const assignPhoneNumberToAgent = async (
-  phoneNumberId: string,
-  agentBaseId: string,
-  incoming: boolean,
-  accessToken: string | null
-) => {
-  let response = true;
-  try {
-    await Ajax.req({
-      url: `${baseUrl}/api/v1/agent/phone-number/assign`,
-      method: "POST",
-      body: {
-        phone_number_id: phoneNumberId,
-        agent_base_id: agentBaseId,
-        incoming,
-      },
-      accessToken,
-    });
-  } catch (error) {
-    response = false;
-    console.error(error);
-  }
-  return response;
-};
-
 export const getAllPhoneNumbers = async (accessToken: string | null) => {
   let response = null;
   try {

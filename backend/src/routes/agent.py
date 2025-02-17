@@ -21,6 +21,7 @@ from src.db.api import (
     get_all_phone_numbers,
     get_analytics_report,
     get_available_phone_numbers,
+    get_phone_number_sid_map,
     insert_agent,
     insert_phone_number,
     make_agent_active,
@@ -36,7 +37,12 @@ from src.helixion_types import (
     SerializedUUID,
     TransferCallNumber,
 )
-from src.twilio_utils import available_phone_numbers
+from src.settings import settings
+from src.twilio_utils import (
+    available_phone_numbers,
+    buy_phone_number,
+    update_call_webhook_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -311,13 +317,19 @@ class BuyPhoneNumberRequest(BaseModel):
     "/phone-number/buy",
     response_model=AgentPhoneNumber,
 )
-async def buy_phone_number(
+async def buy_number(
     request: BuyPhoneNumberRequest,
     user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ) -> AgentPhoneNumber:
+    phone_number_sid = buy_phone_number(request.phone_number)
+    if phone_number_sid is None:
+        raise HTTPException(
+            status_code=400, detail="Failed to buy phone number"
+        )
     agent_phone_number_model = await insert_phone_number(
         request.phone_number,
+        phone_number_sid,
         cast(str, user.active_org_id),
         db,
     )
@@ -329,27 +341,6 @@ async def buy_phone_number(
     )
     await db.commit()
     return output
-
-
-class AssignPhoneNumberRequest(BaseModel):
-    phone_number_id: SerializedUUID
-    agent_base_id: SerializedUUID
-    incoming: bool
-
-
-@router.post("/phone-number/assign", status_code=204)
-async def assign_phone_number(
-    request: AssignPhoneNumberRequest,
-    db: async_scoped_session = Depends(get_session),
-):
-    await assign_phone_number_to_agent(
-        request.phone_number_id,
-        request.agent_base_id,
-        request.incoming,
-        db,
-    )
-    await db.commit()
-    return Response(status_code=204)
 
 
 @router.get(
@@ -406,24 +397,38 @@ async def assign_multiple_phone_numbers(
             for phone_number in request.phone_numbers
         ]
     )
+    phone_number_sid_map = await get_phone_number_sid_map(
+        cast(str, user.active_org_id),
+        db,
+    )
 
     unassigned_phone_numbers = (
         existing_phone_numbers_assigned - updated_phone_numbers
     )
     for phone_number_id in unassigned_phone_numbers:
+        phone_number_sid = phone_number_sid_map[phone_number_id]
         await assign_phone_number_to_agent(
             phone_number_id,
             None,
             False,
             db,
         )
+        update_call_webhook_url(
+            phone_number_sid,
+            None,
+        )
 
     for phone_number in request.phone_numbers:
+        phone_number_sid = phone_number_sid_map[phone_number.id]
         await assign_phone_number_to_agent(
             phone_number.id,
             request.agent_base_id,
             phone_number.incoming,
             db,
+        )
+        update_call_webhook_url(
+            phone_number_sid,
+            f"https://{settings.host}/api/v1/phone/webhook/call-status/{phone_number.id}",
         )
 
     await db.commit()
