@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { PersonIcon } from "@radix-ui/react-icons";
-import { ArchiveIcon, BarChartIcon, BookIcon } from "lucide-react";
+import { ArchiveIcon, BarChartIcon, BookIcon, PhoneIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { UserNav } from "./UserNav";
 import { useUserContext } from "@/contexts/UserContext";
@@ -88,6 +88,11 @@ export const PageSidebar = () => {
                 icon={<BookIcon />}
                 label="Knowledge Bases"
                 href="/knowledge-bases"
+              />
+              <SidebarItem
+                icon={<PhoneIcon />}
+                label="Phone Numbers"
+                href="/phone-numbers"
               />
             </SidebarMenu>
           </SidebarGroupContent>

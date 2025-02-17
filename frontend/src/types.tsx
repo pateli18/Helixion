@@ -88,3 +88,10 @@ export type KnowledgeBase = {
   name: string;
   documents: DocumentMetadata[];
 };
+
+export type AgentPhoneNumber = {
+  id: string;
+  phone_number: string;
+  incoming: boolean;
+  agent: AgentMetadata | null;
+};

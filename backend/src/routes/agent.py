@@ -13,21 +13,28 @@ from src.ai.prompts import default_system_prompt
 from src.ai.sample_values import generate_sample_values
 from src.auth import User, require_user
 from src.db.api import (
+    assign_phone_number_to_agent,
     get_agent,
     get_agents,
+    get_agents_metadata,
+    get_all_phone_numbers,
     get_analytics_report,
     insert_agent,
+    insert_phone_number,
     make_agent_active,
     update_agent_tool_configuration,
 )
 from src.db.base import get_session
-from src.db.converter import convert_agent_model
+from src.db.converter import convert_agent_model, convert_agent_phone_number
 from src.helixion_types import (
     Agent,
     AgentBase,
+    AgentMetadata,
+    AgentPhoneNumber,
     SerializedUUID,
     TransferCallNumber,
 )
+from src.twilio_utils import available_phone_numbers
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +56,18 @@ async def retrieve_all_agents(
 ) -> list[Agent]:
     agents = await get_agents(cast(str, user.active_org_id), db)
     return [convert_agent_model(agent) for agent in agents]
+
+
+@router.get(
+    "/metadata/all",
+    response_model=list[AgentMetadata],
+    dependencies=[Depends(require_user)],
+)
+async def get_all_agent_metadata(
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+) -> list[AgentMetadata]:
+    return await get_agents_metadata(cast(str, user.active_org_id), db)
 
 
 class NewAgentVersionRequest(BaseModel):
@@ -249,6 +268,86 @@ async def activate_version(
         )
     await make_agent_active(
         version_id, cast(SerializedUUID, agent.base_id), db
+    )
+    await db.commit()
+    return Response(status_code=204)
+
+
+@router.get(
+    "/phone-number/all",
+    response_model=list[AgentPhoneNumber],
+    dependencies=[Depends(require_user)],
+)
+async def get_all_numbers(
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+) -> list[AgentPhoneNumber]:
+    phone_numbers = await get_all_phone_numbers(str(user.active_org_id), db)
+    return [
+        convert_agent_phone_number(
+            phone_number,
+            phone_number.agents[0] if len(phone_number.agents) > 0 else None,
+        )
+        for phone_number in phone_numbers
+    ]
+
+
+@router.get(
+    "/phone-number/available/{country_code}/{area_code}",
+    response_model=list[str],
+    dependencies=[Depends(require_user)],
+)
+async def get_available_phone_numbers(
+    country_code: str,
+    area_code: int,
+) -> list[str]:
+    return available_phone_numbers(country_code, area_code)
+
+
+class BuyPhoneNumberRequest(BaseModel):
+    phone_number: str
+
+
+@router.post(
+    "/phone-number/buy",
+    response_model=AgentPhoneNumber,
+)
+async def buy_phone_number(
+    request: BuyPhoneNumberRequest,
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+) -> AgentPhoneNumber:
+    agent_phone_number_model = await insert_phone_number(
+        request.phone_number,
+        cast(str, user.active_org_id),
+        db,
+    )
+    output = AgentPhoneNumber(
+        id=cast(SerializedUUID, agent_phone_number_model.id),
+        phone_number=cast(str, agent_phone_number_model.phone_number),
+        incoming=cast(bool, agent_phone_number_model.incoming),
+        agent=None,
+    )
+    await db.commit()
+    return output
+
+
+class AssignPhoneNumberRequest(BaseModel):
+    phone_number_id: SerializedUUID
+    agent_base_id: SerializedUUID
+    incoming: bool
+
+
+@router.post("/phone-number/assign", status_code=204)
+async def assign_phone_number(
+    request: AssignPhoneNumberRequest,
+    db: async_scoped_session = Depends(get_session),
+):
+    await assign_phone_number_to_agent(
+        request.phone_number_id,
+        request.agent_base_id,
+        request.incoming,
+        db,
     )
     await db.commit()
     return Response(status_code=204)

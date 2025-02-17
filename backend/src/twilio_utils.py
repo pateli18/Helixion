@@ -42,3 +42,20 @@ def send_text_message(
         status_callback=status_callback,
     )
     return response.sid
+
+
+def available_phone_numbers(country_code: str, area_code: int) -> list[str]:
+    available_numbers = twilio_client.available_phone_numbers(
+        country_code
+    ).local.list(
+        area_code=area_code,
+    )
+    return [
+        number.phone_number
+        for number in available_numbers
+        if number.phone_number is not None
+    ]
+
+
+def buy_phone_number(phone_number: str):
+    twilio_client.incoming_phone_numbers.create(phone_number=phone_number)

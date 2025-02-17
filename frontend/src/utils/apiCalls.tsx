@@ -6,6 +6,8 @@ import {
   SpeakerSegment,
   KnowledgeBase,
   DocumentMetadata,
+  AgentPhoneNumber,
+  AgentMetadata,
 } from "@/types";
 import Ajax from "./Ajax";
 
@@ -154,6 +156,20 @@ export const getAgents = async (accessToken: string | null) => {
   try {
     response = await Ajax.req<Agent[]>({
       url: `${baseUrl}/api/v1/agent/all`,
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const getAgentMetadata = async (accessToken: string | null) => {
+  let response = null;
+  try {
+    response = await Ajax.req<AgentMetadata[]>({
+      url: `${baseUrl}/api/v1/agent/metadata/all`,
       method: "GET",
       accessToken,
     });
@@ -357,6 +373,81 @@ export const createKnowledgeBase = async (
       url: `${baseUrl}/api/v1/knowledge-base/create`,
       method: "POST",
       body: { name },
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const getAvailablePhoneNumbers = async (
+  countryCode: string,
+  areaCode: string,
+  accessToken: string | null
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<string[]>({
+      url: `${baseUrl}/api/v1/agent/phone-number/available/${countryCode}/${areaCode}`,
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const buyPhoneNumber = async (
+  phoneNumber: string,
+  accessToken: string | null
+) => {
+  let response = null;
+  try {
+    response = await Ajax.req<AgentPhoneNumber>({
+      url: `${baseUrl}/api/v1/agent/phone-number/buy`,
+      method: "POST",
+      body: { phone_number: phoneNumber },
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const assignPhoneNumberToAgent = async (
+  phoneNumberId: string,
+  agentBaseId: string,
+  incoming: boolean,
+  accessToken: string | null
+) => {
+  let response = true;
+  try {
+    await Ajax.req({
+      url: `${baseUrl}/api/v1/agent/phone-number/assign`,
+      method: "POST",
+      body: {
+        phone_number_id: phoneNumberId,
+        agent_base_id: agentBaseId,
+        incoming,
+      },
+      accessToken,
+    });
+  } catch (error) {
+    response = false;
+    console.error(error);
+  }
+  return response;
+};
+
+export const getAllPhoneNumbers = async (accessToken: string | null) => {
+  let response = null;
+  try {
+    response = await Ajax.req<AgentPhoneNumber[]>({
+      url: `${baseUrl}/api/v1/agent/phone-number/all`,
+      method: "GET",
       accessToken,
     });
   } catch (error) {

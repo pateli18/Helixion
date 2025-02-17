@@ -10,6 +10,7 @@ import { CallHistoryPage } from "./pages/CallHistory/CallHistory";
 import { CallAnalyticsPage } from "./pages/CallAnalytics/CallAnalytics";
 import { UserProvider } from "./contexts/UserContext";
 import { KnowledgeBasePage } from "./pages/KnowledgeBase/KnowledgeBase";
+import { PhoneNumbersPage } from "./pages/PhoneNumbers/PhoneNumbers";
 const container = document.getElementById("root");
 const root = createRoot(container!);
 
@@ -24,6 +25,7 @@ export const App = () => {
               <Route path="/call-history" element={<CallHistoryPage />} />
               <Route path="/call-analytics" element={<CallAnalyticsPage />} />
               <Route path="/knowledge-bases" element={<KnowledgeBasePage />} />
+              <Route path="/phone-numbers" element={<PhoneNumbersPage />} />
             </Routes>
           </UserProvider>
           <Toaster richColors />

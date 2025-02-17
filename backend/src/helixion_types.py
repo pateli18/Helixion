@@ -294,6 +294,7 @@ class AgentPhoneNumber(BaseModel):
     id: SerializedUUID
     phone_number: str
     incoming: bool
+    agent: Optional[AgentMetadata]
 
 
 class Agent(AgentBase):

@@ -243,7 +243,8 @@ async def outbound_call(
         raise HTTPException(status_code=403, detail="Agent not found")
 
     agent_phone_numbers = [
-        convert_agent_phone_number(item) for item in agent_model.phone_numbers
+        convert_agent_phone_number(item, None)
+        for item in agent_model.phone_numbers
     ]
     if request.outbound_phone_number_id is not None:
         matching_phone_numbers = [

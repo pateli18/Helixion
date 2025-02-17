@@ -77,11 +77,13 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
 
 def convert_agent_phone_number(
     agent_phone_number: AgentPhoneNumberModel,
+    agent: Optional[AgentMetadata],
 ) -> AgentPhoneNumber:
     return AgentPhoneNumber(
         id=cast(SerializedUUID, agent_phone_number.id),
         phone_number=cast(str, agent_phone_number.phone_number),
         incoming=cast(bool, agent_phone_number.incoming),
+        agent=agent,
     )
 
 
@@ -98,7 +100,8 @@ def convert_agent_model(agent: AgentModel) -> Agent:
         tool_configuration=cast(Optional[dict], agent.tool_configuration)
         or {},
         phone_numbers=[
-            convert_agent_phone_number(item) for item in agent.phone_numbers
+            convert_agent_phone_number(item, None)
+            for item in agent.phone_numbers
         ],
     )
 

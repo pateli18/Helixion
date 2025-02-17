@@ -31,7 +31,8 @@ class AgentModel(Base, TimestampMixin):
     phone_numbers = relationship(
         "AgentPhoneNumberModel",
         back_populates="agents",
-        primaryjoin="foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id",
+        primaryjoin="and_(foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id, "
+        "AgentModel.active == True)",
     )
 
 
@@ -43,12 +44,16 @@ class AgentPhoneNumberModel(Base, TimestampMixin):
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
-    base_agent_id = Column(UUID(as_uuid=True), nullable=False)
+    base_agent_id = Column(UUID(as_uuid=True), nullable=True)
     phone_number = Column(VARCHAR, nullable=False)
     incoming = Column(Boolean, nullable=False)
+    organization_id = Column(
+        VARCHAR, ForeignKey("organization.id"), nullable=False
+    )
 
     agents = relationship(
         "AgentModel",
         back_populates="phone_numbers",
-        primaryjoin="foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id",
+        primaryjoin="and_(foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id, "
+        "AgentModel.active == True)",
     )

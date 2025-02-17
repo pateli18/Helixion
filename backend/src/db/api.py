@@ -22,6 +22,7 @@ from src.db.models import (
 )
 from src.helixion_types import (
     AgentBase,
+    AgentMetadata,
     PhoneCallEndReason,
     PhoneCallType,
     SerializedUUID,
@@ -449,3 +450,63 @@ async def create_knowledge_base(
         )
     )
     return result.scalar_one()
+
+
+async def insert_phone_number(
+    phone_number: str,
+    organization_id: str,
+    db: async_scoped_session,
+) -> AgentPhoneNumberModel:
+    result = await db.execute(
+        insert(AgentPhoneNumberModel)
+        .returning(AgentPhoneNumberModel)
+        .values(phone_number=phone_number, organization_id=organization_id)
+    )
+    return result.scalar_one()
+
+
+async def assign_phone_number_to_agent(
+    phone_number_id: SerializedUUID,
+    agent_id: SerializedUUID,
+    incoming: bool,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        update(AgentPhoneNumberModel)
+        .where(AgentPhoneNumberModel.id == phone_number_id)
+        .values(
+            base_agent_id=agent_id,
+            incoming=incoming,
+        )
+    )
+
+
+async def get_agents_metadata(
+    organization_id: str,
+    db: async_scoped_session,
+) -> list[AgentMetadata]:
+    result = await db.execute(
+        select(AgentModel.base_id, AgentModel.name, AgentModel.id)
+        .where(AgentModel.active == True)  # noqa E712
+        .where(AgentModel.organization_id == organization_id)
+    )
+    return [
+        AgentMetadata(
+            base_id=base_id,
+            name=name,
+            version_id=version_id,
+        )
+        for base_id, name, version_id in result
+    ]
+
+
+async def get_all_phone_numbers(
+    organization_id: str,
+    db: async_scoped_session,
+) -> list[AgentPhoneNumberModel]:
+    result = await db.execute(
+        select(AgentPhoneNumberModel)
+        .options(selectinload(AgentPhoneNumberModel.agents))
+        .where(AgentPhoneNumberModel.organization_id == organization_id)
+    )
+    return list(result.scalars())
