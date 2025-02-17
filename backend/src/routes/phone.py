@@ -54,6 +54,7 @@ from src.db.converter import (
 )
 from src.helixion_types import (
     BROWSER_NAME,
+    DEFAULT_PHONE_NUMBER,
     TERMINAL_PHONE_CALL_STATUSES,
     AiMessageEventTypes,
     BarHeight,
@@ -263,7 +264,11 @@ async def outbound_call(
             )
         from_phone_number = matching_phone_numbers[0].phone_number
     else:
-        from_phone_number = random.choice(agent_phone_numbers).phone_number
+        from_phone_number = (
+            random.choice(agent_phone_numbers).phone_number
+            if len(agent_phone_numbers) > 0
+            else DEFAULT_PHONE_NUMBER
+        )
 
     phone_call_id = uuid4()
     call = twilio_client.calls.create(

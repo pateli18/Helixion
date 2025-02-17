@@ -9,6 +9,7 @@ AUDIO_QUEUE_NAME = "audio_queue"
 METADATA_QUEUE_NAME = "metadata_queue"
 CALL_END_EVENT = "END"
 BROWSER_NAME = "browser"
+DEFAULT_PHONE_NUMBER = "+14153407906"
 AudioFormat = Literal["pcm16", "g711_ulaw", "g711_alaw"]
 Voice = Literal[
     "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"
