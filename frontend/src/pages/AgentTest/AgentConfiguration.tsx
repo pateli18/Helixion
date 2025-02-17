@@ -14,6 +14,7 @@ import {
   createNewAgentVersion,
   createAgent,
   activateAgentVersion,
+  assignMultiplePhoneNumbersToAgent,
 } from "@/utils/apiCalls";
 import { loadAndFormatDate } from "@/utils/dateFormat";
 import { PlusIcon, ReloadIcon } from "@radix-ui/react-icons";
@@ -166,19 +167,34 @@ const BaseAgentConfiguration = (props: {
         newVersion.system_message,
         props.activeAgent?.sample_values ?? {}
       );
-      const response = await createNewAgentVersion(
-        newVersion,
-        newFields,
-        accessToken
-      );
+
+      const [newAgentResponse, phoneNumberResponse] = await Promise.all([
+        createNewAgentVersion(newVersion, newFields, accessToken),
+        assignMultiplePhoneNumbersToAgent(
+          newVersion.phone_numbers,
+          newVersion.base_id,
+          accessToken
+        ),
+      ]);
       setSaveLoading(false);
-      if (response !== null) {
+      if (newAgentResponse !== null) {
         props.setAgents((prev) => {
           const newAgents = [
-            response,
+            {
+              ...newAgentResponse,
+              phone_numbers: phoneNumberResponse
+                ? newVersion.phone_numbers
+                : newAgentResponse.phone_numbers,
+            },
             ...prev.map((agent) => {
-              if (agent.base_id === response.base_id) {
-                return { ...agent, active: false };
+              if (agent.base_id === newAgentResponse.base_id) {
+                return {
+                  ...agent,
+                  active: false,
+                  phone_numbers: phoneNumberResponse
+                    ? newVersion.phone_numbers
+                    : agent.phone_numbers,
+                };
               }
               return agent;
             }),
@@ -186,8 +202,8 @@ const BaseAgentConfiguration = (props: {
           return newAgents;
         });
         props.setAgentId({
-          baseId: response.base_id,
-          versionId: response.id,
+          baseId: newAgentResponse.base_id,
+          versionId: newAgentResponse.id,
         });
         setNewVersion(null);
         toast.success("Version saved");
@@ -400,20 +416,20 @@ const BaseAgentConfiguration = (props: {
 
       {props.activeAgent && (
         <ToolConfigurationView
-          agentId={props.activeAgent.id}
-          existingToolConfiguration={
-            newVersion?.tool_configuration ??
-            props.activeAgent.tool_configuration ??
-            {}
-          }
-          successCallback={(toolConfiguration) => {
+          agent={newVersion ?? props.activeAgent}
+          successCallback={(toolConfiguration, assignedPhoneNumbers) => {
             setNewVersion((prev) => {
               if (prev) {
-                return { ...prev, tool_configuration: toolConfiguration };
+                return {
+                  ...prev,
+                  tool_configuration: toolConfiguration,
+                  phone_numbers: assignedPhoneNumbers,
+                };
               } else {
                 return {
                   ...props.activeAgent!,
                   tool_configuration: toolConfiguration,
+                  phone_numbers: assignedPhoneNumbers,
                 };
               }
             });

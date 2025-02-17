@@ -455,3 +455,46 @@ export const getAllPhoneNumbers = async (accessToken: string | null) => {
   }
   return response;
 };
+
+export const getIncomingAvailablePhoneNumbers = async (
+  existingPhoneNumberIds: string[],
+  accessToken: string | null
+) => {
+  let response = null;
+  try {
+    const idsQueryParam = existingPhoneNumberIds
+      .map((id) => `existing_phone_number_ids=${id}`)
+      .join("&");
+    response = await Ajax.req<AgentPhoneNumber[]>({
+      url: `${baseUrl}/api/v1/agent/phone-number/incoming-available?${idsQueryParam}`,
+      method: "GET",
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+  }
+  return response;
+};
+
+export const assignMultiplePhoneNumbersToAgent = async (
+  phoneNumbers: AgentPhoneNumber[],
+  agentBaseId: string,
+  accessToken: string | null
+) => {
+  let response = true;
+  try {
+    await Ajax.req({
+      url: `${baseUrl}/api/v1/agent/phone-number/update-assigned`,
+      method: "POST",
+      body: {
+        phone_numbers: phoneNumbers,
+        agent_base_id: agentBaseId,
+      },
+      accessToken,
+    });
+  } catch (error) {
+    response = false;
+    console.error(error);
+  }
+  return response;
+};

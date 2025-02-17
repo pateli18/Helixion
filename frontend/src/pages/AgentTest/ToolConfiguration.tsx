@@ -12,14 +12,12 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import {
-  updateToolConfiguration,
   getAllKnowledgeBases,
+  getIncomingAvailablePhoneNumbers,
 } from "@/utils/apiCalls";
 import { useUserContext } from "@/contexts/UserContext";
-import { ReloadIcon } from "@radix-ui/react-icons";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, TrashIcon } from "@radix-ui/react-icons";
 import { MultiSelectControl } from "@/components/ui/MultiSelectControl";
+import { Agent, AgentPhoneNumber } from "@/types";
 
 const ToolConfigurationSchema = z.object({
   hang_up: z.boolean(),
@@ -51,6 +50,13 @@ const ToolConfigurationSchema = z.object({
     })
   ),
   enter_keypad: z.boolean(),
+  assign_phone_numbers: z.boolean(),
+  phone_numbers: z.array(
+    z.object({
+      id: z.string(),
+      incoming: z.boolean(),
+    })
+  ),
 });
 
 const SwitchField = (props: {
@@ -60,7 +66,8 @@ const SwitchField = (props: {
     | "send_text"
     | "transfer_call"
     | "enter_keypad"
-    | "knowledge_base";
+    | "knowledge_base"
+    | "assign_phone_numbers";
   label: string;
   description: string;
   children?: React.ReactNode;
@@ -163,6 +170,137 @@ const TransferCallNumbers = (props: {
   );
 };
 
+const AssignPhoneNumbers = (props: {
+  form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
+  phoneNumbers: AgentPhoneNumber[];
+}) => {
+  const phoneNumbersEnabled = props.form.watch("assign_phone_numbers");
+  const selectedPhoneNumbers = props.phoneNumbers.filter((pn) =>
+    props.form.watch("phone_numbers").some((pn2) => pn2.id === pn.id)
+  );
+
+  if (!phoneNumbersEnabled) return null;
+
+  const unassignedPhoneNumbers = props.phoneNumbers.filter(
+    (pn) => !selectedPhoneNumbers.some((spn) => spn.id === pn.id)
+  );
+
+  const assignNewNumber = (phoneNumber: AgentPhoneNumber) => {
+    const currentNumbers = props.form.watch("phone_numbers");
+    props.form.setValue("phone_numbers", [
+      ...currentNumbers,
+      { id: phoneNumber.id, incoming: false },
+    ]);
+  };
+
+  const removeNumber = (phoneNumberId: string) => {
+    const currentNumbers = props.form.watch("phone_numbers");
+    props.form.setValue(
+      "phone_numbers",
+      currentNumbers.filter((pn) => pn.id !== phoneNumberId)
+    );
+  };
+
+  const toggleIncoming = (phoneNumberId: string, newValue: boolean) => {
+    const currentNumbers = props.form.watch("phone_numbers");
+    props.form.setValue(
+      "phone_numbers",
+      currentNumbers.map((pn) =>
+        pn.id === phoneNumberId ? { ...pn, incoming: newValue } : pn
+      )
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {props.phoneNumbers.length === 0 && (
+        <Button
+          variant="default"
+          size="sm"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.open("/phone-numbers", "_blank");
+          }}
+        >
+          Buy Phone Numbers
+        </Button>
+      )}
+      {selectedPhoneNumbers.map((phoneNumber) => (
+        <div
+          key={phoneNumber.id}
+          className="flex items-center justify-between gap-4 p-2 border rounded"
+        >
+          <span className="text-sm">{phoneNumber.phone_number}</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">Incoming</span>
+              <Switch
+                checked={
+                  props.form
+                    .watch("phone_numbers")
+                    .find((pn) => pn.id === phoneNumber.id)?.incoming ?? false
+                }
+                onCheckedChange={(checked) =>
+                  toggleIncoming(phoneNumber.id, checked)
+                }
+              />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => removeNumber(phoneNumber.id)}
+            >
+              <TrashIcon className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      {unassignedPhoneNumbers.length > 0 && (
+        <div className="flex justify-center">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <PlusIcon className="h-4 w-4 mr-2" /> Assign Number
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Assign Phone Number</DialogTitle>
+                <DialogDescription>
+                  Select a phone number to assign to this agent
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {unassignedPhoneNumbers.map((phoneNumber) => (
+                  <Button
+                    key={phoneNumber.id}
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => {
+                      assignNewNumber(phoneNumber);
+                      const closeDialog = document.querySelector(
+                        "[data-dialog-close]"
+                      );
+                      if (closeDialog instanceof HTMLElement) {
+                        closeDialog.click();
+                      }
+                    }}
+                  >
+                    {phoneNumber.phone_number}
+                  </Button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const KnowledgeBases = (props: {
   form: UseFormReturn<z.infer<typeof ToolConfigurationSchema>>;
 }) => {
@@ -216,41 +354,92 @@ const KnowledgeBases = (props: {
 };
 
 const ToolConfigurationForm = (props: {
-  successCallback: (toolConfiguration: Record<string, any>) => void;
-  existingToolConfiguration: Record<string, any>;
-  agentId: string;
+  successCallback: (
+    toolConfiguration: Record<string, any>,
+    assignedPhoneNumbers: AgentPhoneNumber[]
+  ) => void;
+  existingAgent: Agent;
 }) => {
+  const { getAccessToken } = useUserContext();
+  const [phoneNumbers, setPhoneNumbers] = useState<AgentPhoneNumber[]>([]);
+  const fetchPhoneNumbers = async () => {
+    const accessToken = await getAccessToken();
+    const response = await getIncomingAvailablePhoneNumbers(
+      props.existingAgent.phone_numbers.map((pn) => pn.id),
+      accessToken
+    );
+    if (response) {
+      setPhoneNumbers(response);
+    }
+  };
+
+  useEffect(() => {
+    fetchPhoneNumbers();
+  }, []);
+
   const form = useForm<z.infer<typeof ToolConfigurationSchema>>({
     resolver: zodResolver(ToolConfigurationSchema),
     defaultValues: {
-      hang_up: props.existingToolConfiguration.hang_up ?? false,
-      send_text: props.existingToolConfiguration.send_text ?? false,
+      hang_up: props.existingAgent.tool_configuration.hang_up ?? false,
+      send_text: props.existingAgent.tool_configuration.send_text ?? false,
       transfer_call:
-        props.existingToolConfiguration.transfer_call_numbers &&
-        props.existingToolConfiguration.transfer_call_numbers.length > 0
+        props.existingAgent.tool_configuration.transfer_call_numbers &&
+        props.existingAgent.tool_configuration.transfer_call_numbers.length > 0
           ? true
           : false,
       transfer_call_numbers:
-        props.existingToolConfiguration.transfer_call_numbers || [],
-      enter_keypad: props.existingToolConfiguration.enter_keypad ?? false,
+        props.existingAgent.tool_configuration.transfer_call_numbers || [],
+      enter_keypad:
+        props.existingAgent.tool_configuration.enter_keypad ?? false,
       knowledge_base:
-        props.existingToolConfiguration.knowledge_bases &&
-        props.existingToolConfiguration.knowledge_bases.length > 0
+        props.existingAgent.tool_configuration.knowledge_bases &&
+        props.existingAgent.tool_configuration.knowledge_bases.length > 0
           ? true
           : false,
-      knowledge_bases: props.existingToolConfiguration.knowledge_bases || [],
+      knowledge_bases:
+        props.existingAgent.tool_configuration.knowledge_bases || [],
+      assign_phone_numbers:
+        props.existingAgent.phone_numbers &&
+        props.existingAgent.phone_numbers.length > 0
+          ? true
+          : false,
+      phone_numbers: props.existingAgent.phone_numbers || [],
     },
   });
 
   const onSubmit = async (data: z.infer<typeof ToolConfigurationSchema>) => {
-    props.successCallback(data);
-    toast.success("Tool configuration updated");
+    const newToolConfiguration = {
+      hang_up: data.hang_up,
+      send_text: data.send_text,
+      transfer_call_numbers: data.transfer_call_numbers,
+      enter_keypad: data.enter_keypad,
+      knowledge_bases: data.knowledge_bases,
+    };
+    props.successCallback(
+      newToolConfiguration,
+      phoneNumbers
+        .filter((pn) => data.phone_numbers.some((pn2) => pn2.id === pn.id))
+        .map((pn) => ({
+          ...pn,
+          incoming:
+            data.phone_numbers.find((pn2) => pn2.id === pn.id)?.incoming ??
+            false,
+        }))
+    );
   };
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
         <div className="space-y-4">
+          <SwitchField
+            form={form}
+            name="assign_phone_numbers"
+            label="Assign Phone Numbers"
+            description="Assign dedicated numbers to your agent and allow incoming calls"
+          >
+            <AssignPhoneNumbers form={form} phoneNumbers={phoneNumbers} />
+          </SwitchField>
           <SwitchField
             form={form}
             name="hang_up"
@@ -293,9 +482,11 @@ const ToolConfigurationForm = (props: {
 };
 
 const ToolConfigurationDialog = (props: {
-  agentId: string;
-  existingToolConfiguration: Record<string, any>;
-  successCallback: (toolConfiguration: Record<string, any>) => void;
+  existingAgent: Agent;
+  successCallback: (
+    toolConfiguration: Record<string, any>,
+    assignedPhoneNumbers: AgentPhoneNumber[]
+  ) => void;
 }) => {
   const [open, setOpen] = useState(false);
   return (
@@ -311,9 +502,9 @@ const ToolConfigurationDialog = (props: {
           </DialogDescription>
         </DialogHeader>
         <ToolConfigurationForm
-          {...props}
-          successCallback={(toolConfiguration) => {
-            props.successCallback(toolConfiguration);
+          existingAgent={props.existingAgent}
+          successCallback={(toolConfiguration, assignedPhoneNumbers) => {
+            props.successCallback(toolConfiguration, assignedPhoneNumbers);
             setOpen(false);
           }}
         />
@@ -331,30 +522,38 @@ const ToolBadge = (props: { label: string }) => {
 };
 
 export const ToolConfigurationView = (props: {
-  agentId: string;
-  existingToolConfiguration: Record<string, any>;
-  successCallback: (toolConfiguration: Record<string, any>) => void;
+  agent: Agent;
+  successCallback: (
+    toolConfiguration: Record<string, any>,
+    assignedPhoneNumbers: AgentPhoneNumber[]
+  ) => void;
 }) => {
   return (
     <div className="flex items-center space-x-2">
       <ToolConfigurationDialog
-        agentId={props.agentId}
-        existingToolConfiguration={props.existingToolConfiguration}
+        existingAgent={props.agent}
         successCallback={props.successCallback}
       />
-      {props.existingToolConfiguration.hang_up && <ToolBadge label="Hang up" />}
-      {props.existingToolConfiguration.send_text && (
+      {props.agent.phone_numbers.length > 0 && (
+        <ToolBadge
+          label={`${props.agent.phone_numbers.length} Phone #${
+            props.agent.phone_numbers.length > 1 ? "s" : ""
+          }`}
+        />
+      )}
+      {props.agent.tool_configuration.hang_up && <ToolBadge label="Hang up" />}
+      {props.agent.tool_configuration.send_text && (
         <ToolBadge label="Send text" />
       )}
-      {props.existingToolConfiguration.transfer_call_numbers &&
-        props.existingToolConfiguration.transfer_call_numbers.length > 0 && (
+      {props.agent.tool_configuration.transfer_call_numbers &&
+        props.agent.tool_configuration.transfer_call_numbers.length > 0 && (
           <ToolBadge label="Transfer call" />
         )}
-      {props.existingToolConfiguration.enter_keypad && (
+      {props.agent.tool_configuration.enter_keypad && (
         <ToolBadge label="Enter keypad" />
       )}
-      {props.existingToolConfiguration.knowledge_bases &&
-        props.existingToolConfiguration.knowledge_bases.map(
+      {props.agent.tool_configuration.knowledge_bases &&
+        props.agent.tool_configuration.knowledge_bases.map(
           (kb: { id: string; name: string }) => (
             <ToolBadge key={kb.id} label={kb.name} />
           )

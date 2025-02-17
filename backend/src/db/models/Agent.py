@@ -30,7 +30,7 @@ class AgentModel(Base, TimestampMixin):
     user = relationship("UserModel")
     phone_numbers = relationship(
         "AgentPhoneNumberModel",
-        back_populates="agents",
+        back_populates="agent",
         primaryjoin="and_(foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id, "
         "AgentModel.active == True)",
     )
@@ -51,7 +51,7 @@ class AgentPhoneNumberModel(Base, TimestampMixin):
         VARCHAR, ForeignKey("organization.id"), nullable=False
     )
 
-    agents = relationship(
+    agent = relationship(
         "AgentModel",
         back_populates="phone_numbers",
         primaryjoin="and_(foreign(AgentPhoneNumberModel.base_agent_id) == AgentModel.base_id, "

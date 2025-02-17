@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from sqlalchemy import Select, insert, select, update
+from sqlalchemy import Select, insert, or_, select, update
 from sqlalchemy.ext.asyncio import async_scoped_session
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -170,6 +170,18 @@ async def get_agent(
 ) -> Optional[AgentModel]:
     query = _base_agent_query()
     result = await db.execute(query.where(AgentModel.id == agent_id))
+    return result.scalar_one_or_none()
+
+
+async def get_active_agent(
+    base_id: SerializedUUID, db: async_scoped_session
+) -> Optional[AgentModel]:
+    query = _base_agent_query()
+    result = await db.execute(
+        query.where(AgentModel.base_id == base_id).where(
+            AgentModel.active == True  # noqa E712
+        )
+    )
     return result.scalar_one_or_none()
 
 
@@ -467,7 +479,7 @@ async def insert_phone_number(
 
 async def assign_phone_number_to_agent(
     phone_number_id: SerializedUUID,
-    agent_id: SerializedUUID,
+    agent_id: Optional[SerializedUUID],
     incoming: bool,
     db: async_scoped_session,
 ) -> None:
@@ -506,7 +518,25 @@ async def get_all_phone_numbers(
 ) -> list[AgentPhoneNumberModel]:
     result = await db.execute(
         select(AgentPhoneNumberModel)
-        .options(selectinload(AgentPhoneNumberModel.agents))
+        .options(selectinload(AgentPhoneNumberModel.agent))
+        .where(AgentPhoneNumberModel.organization_id == organization_id)
+    )
+    return list(result.scalars())
+
+
+async def get_available_phone_numbers(
+    existing_phone_number_ids: list[SerializedUUID],
+    organization_id: str,
+    db: async_scoped_session,
+) -> list[AgentPhoneNumberModel]:
+    result = await db.execute(
+        select(AgentPhoneNumberModel)
+        .where(
+            or_(
+                AgentPhoneNumberModel.id.in_(existing_phone_number_ids),
+                AgentPhoneNumberModel.base_agent_id.is_(None),
+            )
+        )
         .where(AgentPhoneNumberModel.organization_id == organization_id)
     )
     return list(result.scalars())

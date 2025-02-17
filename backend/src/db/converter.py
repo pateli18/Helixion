@@ -1,5 +1,7 @@
 from typing import Optional, cast
 
+from sqlalchemy import inspect
+
 from src.db.models import (
     AgentModel,
     AgentPhoneNumberModel,
@@ -77,13 +79,22 @@ def convert_phone_call_model(phone_call: PhoneCallModel) -> PhoneCallMetadata:
 
 def convert_agent_phone_number(
     agent_phone_number: AgentPhoneNumberModel,
-    agent: Optional[AgentMetadata],
 ) -> AgentPhoneNumber:
+    inspector = inspect(agent_phone_number)
+    has_loaded_agent = "agent" not in inspector.unloaded
     return AgentPhoneNumber(
         id=cast(SerializedUUID, agent_phone_number.id),
         phone_number=cast(str, agent_phone_number.phone_number),
         incoming=cast(bool, agent_phone_number.incoming),
-        agent=agent,
+        agent=(
+            AgentMetadata(
+                base_id=cast(SerializedUUID, agent_phone_number.agent.base_id),
+                name=cast(str, agent_phone_number.agent.name),
+                version_id=cast(SerializedUUID, agent_phone_number.agent.id),
+            )
+            if has_loaded_agent and agent_phone_number.agent is not None
+            else None
+        ),
     )
 
 
@@ -100,8 +111,7 @@ def convert_agent_model(agent: AgentModel) -> Agent:
         tool_configuration=cast(Optional[dict], agent.tool_configuration)
         or {},
         phone_numbers=[
-            convert_agent_phone_number(item, None)
-            for item in agent.phone_numbers
+            convert_agent_phone_number(item) for item in agent.phone_numbers
         ],
     )
 

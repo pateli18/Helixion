@@ -54,6 +54,7 @@ export type Agent = {
   sample_values: Record<string, string>;
   user_email: string;
   tool_configuration: Record<string, any>;
+  phone_numbers: AgentPhoneNumber[];
 };
 
 export type AnalyticsTag = {

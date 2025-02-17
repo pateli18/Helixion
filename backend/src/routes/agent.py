@@ -2,7 +2,7 @@ import logging
 from typing import cast
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
 
@@ -14,11 +14,13 @@ from src.ai.sample_values import generate_sample_values
 from src.auth import User, require_user
 from src.db.api import (
     assign_phone_number_to_agent,
+    get_active_agent,
     get_agent,
     get_agents,
     get_agents_metadata,
     get_all_phone_numbers,
     get_analytics_report,
+    get_available_phone_numbers,
     insert_agent,
     insert_phone_number,
     make_agent_active,
@@ -284,10 +286,7 @@ async def get_all_numbers(
 ) -> list[AgentPhoneNumber]:
     phone_numbers = await get_all_phone_numbers(str(user.active_org_id), db)
     return [
-        convert_agent_phone_number(
-            phone_number,
-            phone_number.agents[0] if len(phone_number.agents) > 0 else None,
-        )
+        convert_agent_phone_number(phone_number)
         for phone_number in phone_numbers
     ]
 
@@ -297,7 +296,7 @@ async def get_all_numbers(
     response_model=list[str],
     dependencies=[Depends(require_user)],
 )
-async def get_available_phone_numbers(
+async def get_available_numbers(
     country_code: str,
     area_code: int,
 ) -> list[str]:
@@ -349,5 +348,83 @@ async def assign_phone_number(
         request.incoming,
         db,
     )
+    await db.commit()
+    return Response(status_code=204)
+
+
+@router.get(
+    "/phone-number/incoming-available",
+    response_model=list[AgentPhoneNumber],
+    dependencies=[Depends(require_user)],
+)
+async def get_incoming_available_numbers(
+    existing_phone_number_ids: list[SerializedUUID] = Query(
+        default_factory=list
+    ),
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+) -> list[AgentPhoneNumber]:
+    phone_number_models = await get_available_phone_numbers(
+        existing_phone_number_ids,
+        cast(str, user.active_org_id),
+        db,
+    )
+    return [
+        convert_agent_phone_number(phone_number_model)
+        for phone_number_model in phone_number_models
+    ]
+
+
+class UpdateAssignedPhoneNumbersRequest(BaseModel):
+    agent_base_id: SerializedUUID
+    phone_numbers: list[AgentPhoneNumber]
+
+
+@router.post(
+    "/phone-number/update-assigned",
+    status_code=204,
+)
+async def assign_multiple_phone_numbers(
+    request: UpdateAssignedPhoneNumbersRequest,
+    user: User = Depends(require_user),
+    db: async_scoped_session = Depends(get_session),
+):
+    agent = await get_active_agent(request.agent_base_id, db)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if cast(str, agent.organization_id) != user.active_org_id:
+        raise HTTPException(status_code=403, detail="Agent not found")
+    existing_phone_numbers_assigned = set(
+        [
+            cast(SerializedUUID, phone_number.id)
+            for phone_number in agent.phone_numbers
+        ]
+    )
+    updated_phone_numbers = set(
+        [
+            cast(SerializedUUID, phone_number.id)
+            for phone_number in request.phone_numbers
+        ]
+    )
+
+    unassigned_phone_numbers = (
+        existing_phone_numbers_assigned - updated_phone_numbers
+    )
+    for phone_number_id in unassigned_phone_numbers:
+        await assign_phone_number_to_agent(
+            phone_number_id,
+            None,
+            False,
+            db,
+        )
+
+    for phone_number in request.phone_numbers:
+        await assign_phone_number_to_agent(
+            phone_number.id,
+            request.agent_base_id,
+            phone_number.incoming,
+            db,
+        )
+
     await db.commit()
     return Response(status_code=204)

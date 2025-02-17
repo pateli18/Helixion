@@ -159,7 +159,7 @@ async def inbound_message(
         return Response(status_code=204)
     await insert_text_message(
         cast(SerializedUUID, agent.id),
-        cast(str, agent.incoming_phone_number),
+        payload["From"],
         to_number,
         payload["Body"],
         TextMessageType.inbound,
@@ -243,8 +243,7 @@ async def outbound_call(
         raise HTTPException(status_code=403, detail="Agent not found")
 
     agent_phone_numbers = [
-        convert_agent_phone_number(item, None)
-        for item in agent_model.phone_numbers
+        convert_agent_phone_number(item) for item in agent_model.phone_numbers
     ]
     if request.outbound_phone_number_id is not None:
         matching_phone_numbers = [
