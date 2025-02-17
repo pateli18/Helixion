@@ -192,10 +192,6 @@ const PhoneNumberTable = (props: {
       cell: ({ row }) => {
         const agentMetadata = row.original.agent;
 
-        if (agentMetadata === null) {
-          return null;
-        }
-
         const onSelectChange = (value: string) => {
           handleAssignNumber(
             row.original.id,
@@ -206,7 +202,10 @@ const PhoneNumberTable = (props: {
         };
 
         return (
-          <Select value={agentMetadata.base_id} onValueChange={onSelectChange}>
+          <Select
+            value={agentMetadata?.base_id ?? undefined}
+            onValueChange={onSelectChange}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select Agent" />
             </SelectTrigger>
