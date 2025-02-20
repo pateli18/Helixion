@@ -438,65 +438,20 @@ class StartWorkflowRequest(BaseModel):
     to_phone_number: str
 
 
-# @router.post(
-#     "/start-workflow",
-#     status_code=204,
-# )
-# async def start_workflow(
-#     request: StartWorkflowRequest,
-#     user: User = Depends(require_user),
-#     db: async_scoped_session = Depends(get_session),
-# ):
-#     organization_id = cast(str, user.active_org_id)
-#     agent_workflow_id = await insert_agent_workflow(
-#         request.config,
-#         request.input_data,
-#         request.to_phone_number,
-#         organization_id,
-#         db,
-#     )
-#     await db.commit()
-#     await execute_workflow(
-#         "AgentWorkflow",
-#         {
-#             "id": agent_workflow_id,
-#             "organization_id": organization_id,
-#         },
-#         QUEUE_NAME,
-#         workflow_id=str(agent_workflow_id),
-#     )
-#     return Response(status_code=204)
-
-
-@router.get(
+@router.post(
     "/start-workflow",
     status_code=204,
 )
 async def start_workflow(
+    request: StartWorkflowRequest,
+    user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ):
-    organization_id = "c0887802-2b2d-4c93-8cfd-78af3b08f95c"
-    test_config = {
-        "config": {
-            "config_blocks": [
-                {
-                    "type": "text_message",
-                    "phone_number": "+13617334739",
-                    "message_template": "Hi {name} this is CliniContact. Thanks for signing up for the Focal Epilepsy study. Please confirm your phone number and your interest in the study by responding YES to this text message. If you are no longer interested in the study, please respond NO.",
-                },
-                {
-                    "type": "wait",
-                    "seconds": 60 * 60,
-                },
-            ]
-        },
-        "input_data": {"name": "John Doe"},
-        "to_phone_number": "+13612326374",
-    }
+    organization_id = cast(str, user.active_org_id)
     agent_workflow_id = await insert_agent_workflow(
-        test_config["config"],
-        test_config["input_data"],
-        test_config["to_phone_number"],
+        request.config,
+        request.input_data,
+        request.to_phone_number,
         organization_id,
         db,
     )
