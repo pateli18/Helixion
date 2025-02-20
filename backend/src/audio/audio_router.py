@@ -8,6 +8,7 @@ import websockets
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 from fastapi.websockets import WebSocketDisconnect, WebSocketState
+from pydantic import BaseModel
 
 from src.ai.caller import AiCaller
 from src.ai.document_query import query_documents
@@ -33,6 +34,11 @@ from src.twilio_utils import (
 logger = logging.getLogger(__name__)
 
 
+class HangUpReason(BaseModel):
+    reason: PhoneCallEndReason
+    data: dict
+
+
 class CallRouter:
     agent_id: SerializedUUID
     organization_id: str
@@ -43,7 +49,7 @@ class CallRouter:
     mark_queue: list[int]
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
-    hang_up_reason: Optional[PhoneCallEndReason]
+    hang_up_reason: Optional[HangUpReason]
     call_type: PhoneCallType
 
     def __init__(
@@ -67,14 +73,21 @@ class CallRouter:
         self.mark_queue_elapsed_time = 0
         self.inter_mark_elapsed_time = 0
         self.ai_caller = ai_caller
-        self._hang_up_reason = None
+        self.hang_up_reason = None
         self.call_type = call_type
 
     async def _cleanup(self) -> None:
-        phone_call_id, duration = await self.ai_caller.close(
-            self._hang_up_reason or PhoneCallEndReason.unknown
+        self.hang_up_reason = self.hang_up_reason or HangUpReason(
+            reason=PhoneCallEndReason.unknown,
+            data={},
         )
-        hang_up_phone_call(self.call_sid)
+        phone_call_id, duration = await self.ai_caller.close(
+            self.hang_up_reason.reason
+        )
+        if self.hang_up_reason.reason == PhoneCallEndReason.transferred:
+            transfer_call(self.call_sid, self.hang_up_reason.data["number"])
+        else:
+            hang_up_phone_call(self.call_sid)
         logger.info("Cleanup complete")
 
         # twilio doesn't provide status callbacks for inbound calls
@@ -107,21 +120,20 @@ class CallRouter:
             receiving_phone_number,
             body,
             sending_phone_number,
-            f"https://{settings.host}/api/v1/phone/webhook/message-status/{message_id}",
+            f"https://{settings.host}/api/v1/phone/webhook/text-message-status/{message_id}",
         )
-        if output_sid is not None:
-            async with async_session_scope() as db:
-                await insert_text_message(
-                    self.agent_id,
-                    sending_phone_number,
-                    receiving_phone_number,
-                    body,
-                    TextMessageType.outbound,
-                    output_sid,
-                    str(self.ai_caller.phone_call_id),
-                    self.organization_id,
-                    db,
-                )
+        async with async_session_scope() as db:
+            await insert_text_message(
+                self.agent_id,
+                sending_phone_number,
+                receiving_phone_number,
+                body,
+                TextMessageType.outbound,
+                output_sid,
+                str(self.ai_caller.phone_call_id),
+                self.organization_id,
+                db,
+            )
 
     async def _transfer_call(self, phone_number_label: str) -> None:
         transfer_call_number: Optional[str] = next(
@@ -139,8 +151,10 @@ class CallRouter:
                 f"Transfer call number not found: {phone_number_label}, call will not be transferred"
             )
         else:
-            self._hang_up_reason = PhoneCallEndReason.transferred
-            transfer_call(self.call_sid, transfer_call_number)
+            self.hang_up_reason = HangUpReason(
+                reason=PhoneCallEndReason.transferred,
+                data={"number": transfer_call_number},
+            )
 
     async def send_to_human(self, websocket: WebSocket):
         try:
@@ -149,20 +163,22 @@ class CallRouter:
                     if message["name"] == "hang_up":
                         arguments = json.loads(message["arguments"])
                         if arguments["reason"] == "answering_machine":
-                            self._hang_up_reason = (
-                                PhoneCallEndReason.voice_mail_bot
+                            self.hang_up_reason = HangUpReason(
+                                reason=PhoneCallEndReason.voice_mail_bot,
+                                data={},
                             )
                             logger.info(
                                 "Answering machine detected, not leaving a message"
                             )
                             break
                         else:
-                            self._hang_up_reason = (
-                                PhoneCallEndReason.end_of_call_bot
+                            self.hang_up_reason = HangUpReason(
+                                reason=PhoneCallEndReason.end_of_call_bot,
+                                data={},
                             )
                             logger.info("Hang up requested by bot")
                     elif message["name"] == "cancel_hang_up":
-                        self._hang_up_reason = None
+                        self.hang_up_reason = None
                         logger.info("Hang up cancelled")
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
@@ -283,7 +299,7 @@ class CallRouter:
                             else None
                         )
                         if (
-                            self._hang_up_reason is not None
+                            self.hang_up_reason is not None
                             and len(self.mark_queue) == 0
                         ):
                             logger.info(
@@ -292,7 +308,10 @@ class CallRouter:
                             break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
-            self._hang_up_reason = PhoneCallEndReason.user_hangup
+            self.hang_up_reason = HangUpReason(
+                reason=PhoneCallEndReason.user_hangup,
+                data={},
+            )
             await self._truncate_audio_message()
         except Exception:
             logger.exception("Error receiving from human")
@@ -307,7 +326,7 @@ class BrowserRouter:
     mark_queue: list[int]
     mark_queue_elapsed_time: int
     inter_mark_start_time: Optional[int]
-    hang_up_reason: Optional[PhoneCallEndReason]
+    hang_up_reason: Optional[HangUpReason]
 
     def __init__(
         self,
@@ -321,17 +340,36 @@ class BrowserRouter:
         self.mark_queue = []
         self.mark_queue_elapsed_time = 0
         self.ai_caller = ai_caller
-        self._hang_up_reason = None
+        self.hang_up_reason = None
         self._cleanup_started = False
 
-    async def _cleanup(self) -> None:
+    async def _cleanup(self, websocket: WebSocket) -> None:
         if self._cleanup_started:
             logger.info("Cleanup already started")
             return
         self._cleanup_started = True
-        logger.info(f"Closing call with reason: {self._hang_up_reason}")
+        self.hang_up_reason = self.hang_up_reason or HangUpReason(
+            reason=PhoneCallEndReason.unknown,
+            data={},
+        )
+        if (
+            self.hang_up_reason.reason == PhoneCallEndReason.transferred
+            and websocket.client_state == WebSocketState.CONNECTED
+        ):
+            await websocket.send_json(
+                {
+                    "event": "message",
+                    "payload": {
+                        "title": "Call Transfer",
+                        "body": f"Call would be transferred to {self.hang_up_reason.data['number']}",
+                    },
+                }
+            )
+
         phone_call_id, duration = await self.ai_caller.close(
-            self._hang_up_reason or PhoneCallEndReason.unknown
+            self.hang_up_reason.reason
+            if self.hang_up_reason is not None
+            else PhoneCallEndReason.unknown
         )
         async with async_session_scope() as db:
             await insert_phone_call_event(
@@ -384,16 +422,10 @@ class BrowserRouter:
                 f"Transfer call number not found: {phone_number_label}, call will not be transferred"
             )
         else:
-            await websocket.send_json(
-                {
-                    "event": "message",
-                    "payload": {
-                        "title": "Call Transer",
-                        "body": f"Call would be transferred to {transfer_call_number}",
-                    },
-                }
+            self.hang_up_reason = HangUpReason(
+                reason=PhoneCallEndReason.transferred,
+                data={"number": transfer_call_number},
             )
-            self._hang_up_reason = PhoneCallEndReason.transferred
 
     async def send_to_human(self, websocket: WebSocket):
         try:
@@ -413,19 +445,21 @@ class BrowserRouter:
                             logger.warning("Hang up sound not found")
                         arguments = json.loads(message["arguments"])
                         if arguments["reason"] == "answering_machine":
-                            self._hang_up_reason = (
-                                PhoneCallEndReason.voice_mail_bot
+                            self.hang_up_reason = HangUpReason(
+                                reason=PhoneCallEndReason.voice_mail_bot,
+                                data={},
                             )
                             logger.info(
                                 "Answering machine detected, not leaving a message"
                             )
                         else:
-                            self._hang_up_reason = (
-                                PhoneCallEndReason.end_of_call_bot
+                            self.hang_up_reason = HangUpReason(
+                                reason=PhoneCallEndReason.end_of_call_bot,
+                                data={},
                             )
                             logger.info("Hang up requested by bot")
                     elif message["name"] == "cancel_hang_up":
-                        self._hang_up_reason = None
+                        self.hang_up_reason = None
                         logger.info("Hang up cancelled")
                     elif message["name"] == "query_documents":
                         arguments = json.loads(message["arguments"])
@@ -509,7 +543,7 @@ class BrowserRouter:
         except Exception:
             logger.exception("Error sending to human")
         finally:
-            await self._cleanup()
+            await self._cleanup(websocket)
             if websocket.client_state == WebSocketState.CONNECTED:
                 try:
                     await websocket.close()
@@ -572,7 +606,7 @@ class BrowserRouter:
                             else None
                         )
                         if (
-                            self._hang_up_reason is not None
+                            self.hang_up_reason is not None
                             and len(self.mark_queue) == 0
                         ):
                             logger.info(
@@ -581,16 +615,22 @@ class BrowserRouter:
                             break
                 elif data["event"] == "hangup":
                     logger.info("Hang up requested by user")
-                    self._hang_up_reason = PhoneCallEndReason.user_hangup
+                    self.hang_up_reason = HangUpReason(
+                        reason=PhoneCallEndReason.user_hangup,
+                        data={},
+                    )
                     await self._truncate_audio_message()
                     break
         except websockets.exceptions.ConnectionClosedOK:
             logger.info("Connection closed")
-            if self._hang_up_reason is None:
-                self._hang_up_reason = PhoneCallEndReason.user_hangup
+            if self.hang_up_reason is None:
+                self.hang_up_reason = HangUpReason(
+                    reason=PhoneCallEndReason.user_hangup,
+                    data={},
+                )
                 await self._truncate_audio_message()
         except Exception:
             logger.exception("Error receiving from human")
         finally:
-            await self._cleanup()
+            await self._cleanup(websocket)
             logger.info("Closed connection to bot")

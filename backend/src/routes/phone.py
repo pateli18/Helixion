@@ -13,6 +13,7 @@ import librosa
 import numpy as np
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
     Request,
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import async_scoped_session
 from twilio.twiml.voice_response import Connect, VoiceResponse
 
 from src.ai.caller import AiCaller, AiMessage, AiMessageQueue
+from src.ai.signup_verification import signup_verification_status_prompt
 from src.audio.audio_router import CallRouter
 from src.audio.data_processing import (
     calculate_bar_heights,
@@ -37,25 +39,32 @@ from src.aws_utils import S3Client
 from src.db.api import (
     check_organization_owns_agent,
     get_agent,
+    get_agent_workflow_by_phone_number,
     get_phone_call,
     get_phone_calls,
     get_phone_number,
+    get_text_messages_from_workflow,
+    insert_agent_workflow_event,
     insert_phone_call,
     insert_phone_call_event,
     insert_text_message,
     insert_text_message_event,
+    update_agent_workflow_status,
     update_phone_call,
 )
-from src.db.base import get_session
+from src.db.base import async_session_scope, get_session
 from src.db.converter import (
     convert_agent_phone_number,
     convert_phone_call_model,
+    convert_text_message_model,
     latest_phone_call_event,
 )
 from src.helixion_types import (
     BROWSER_NAME,
     DEFAULT_PHONE_NUMBER,
     TERMINAL_PHONE_CALL_STATUSES,
+    AgentWorkflowEventType,
+    AgentWorkflowStatus,
     AiMessageEventTypes,
     BarHeight,
     PhoneCallEndReason,
@@ -69,10 +78,12 @@ from src.helixion_types import (
 )
 from src.settings import settings
 from src.twilio_utils import (
+    create_call,
     hang_up_phone_call,
-    twilio_client,
+    send_text_message,
     twilio_request_validator,
 )
+from src.worker.worker_client.worker_client import cancel_workflow
 
 call_messages: dict[SerializedUUID, AiMessageQueue] = {}
 
@@ -132,17 +143,95 @@ async def call_status_webhook(
     return Response(status_code=204)
 
 
-@router.post(
-    "/webhook/text-message-status/{text_message_sid}", status_code=204
-)
+@router.post("/webhook/text-message-status/{text_message_id}", status_code=204)
 async def text_message_status_webhook(
-    text_message_sid: SerializedUUID,
+    text_message_id: SerializedUUID,
     payload: dict = Depends(_validate_twilio_request),
     db: async_scoped_session = Depends(get_session),
 ):
-    await insert_text_message_event(text_message_sid, payload, db)
+    await insert_text_message_event(text_message_id, payload, db)
     await db.commit()
     return Response(status_code=204)
+
+
+async def _handle_workflow_inbound_message(
+    from_phone_number: str,
+    to_phone_number: str,
+    text_message_id: SerializedUUID,
+    organization_id: str,
+):
+    async with async_session_scope() as db:
+        # check if from phone number is associated with a verification workflow
+        agent_workflow = await get_agent_workflow_by_phone_number(
+            from_phone_number, organization_id, db
+        )
+        if agent_workflow is not None:
+            await insert_agent_workflow_event(
+                agent_workflow_id=cast(SerializedUUID, agent_workflow.id),
+                event_type=AgentWorkflowEventType.inbound_text_message,
+                event_link_id=text_message_id,
+                metadata={},
+                db=db,
+            )
+
+            existing_text_message_models = (
+                await get_text_messages_from_workflow(
+                    cast(SerializedUUID, agent_workflow.id), db
+                )
+            )
+            existing_text_messages = [
+                convert_text_message_model(text_message)
+                for text_message in existing_text_message_models
+            ]
+
+            status = await signup_verification_status_prompt(
+                existing_text_messages
+            )
+            if status == "verified":
+                response_message = "Thank you for confirming, a member of the study team will be in touch shortly."
+                await update_agent_workflow_status(
+                    cast(SerializedUUID, agent_workflow.id),
+                    AgentWorkflowStatus.completed,
+                    db,
+                )
+                await cancel_workflow(str(agent_workflow.id))
+            elif status == "not_interested":
+                response_message = "Thank you for your response, we will not contact you further."
+                await update_agent_workflow_status(
+                    cast(SerializedUUID, agent_workflow.id),
+                    AgentWorkflowStatus.completed,
+                    db,
+                )
+                await cancel_workflow(str(agent_workflow.id))
+            else:
+                response_message = "We're sorry but we can't answer that, if you're still interested in joining the study let us know and a member of the study team will be in touch shortly. If you're no longer interested, please let us know and we will remove you from the list."
+
+            output_sid = send_text_message(
+                to_phone_number=from_phone_number,
+                body=response_message,
+                from_phone_number=to_phone_number,
+                status_callback=f"https://{settings.host}/api/v1/phone/webhook/text-message-status/{text_message_id}",
+            )
+
+            outbound_text_message_id = await insert_text_message(
+                agent_id=None,
+                from_phone_number=to_phone_number,
+                to_phone_number=from_phone_number,
+                body=response_message,
+                message_type=TextMessageType.outbound,
+                message_sid=output_sid,
+                initiator="workflow",
+                organization_id=organization_id,
+                db=db,
+            )
+
+            await insert_agent_workflow_event(
+                agent_workflow_id=cast(SerializedUUID, agent_workflow.id),
+                event_type=AgentWorkflowEventType.outbound_text_message,
+                event_link_id=outbound_text_message_id,
+                metadata={"status": status},
+                db=db,
+            )
 
 
 @router.post(
@@ -151,6 +240,7 @@ async def text_message_status_webhook(
 )
 async def inbound_message(
     phone_number_id: SerializedUUID,
+    background_tasks: BackgroundTasks,
     payload: dict = Depends(_validate_twilio_request),
     db: async_scoped_session = Depends(get_session),
 ):
@@ -161,9 +251,17 @@ async def inbound_message(
             f"Phone number not found for phone number {phone_number_id}"
         )
         return Response(status_code=204)
-    await insert_text_message(
-        cast(SerializedUUID, phone_number.agent.id),
-        payload["From"],
+
+    organization_id = cast(str, phone_number.organization_id)
+    from_phone_number = payload["From"]
+
+    text_message_id = await insert_text_message(
+        (
+            cast(SerializedUUID, phone_number.agent.id)
+            if phone_number.agent is not None
+            else None
+        ),
+        from_phone_number,
         to_number,
         payload["Body"],
         TextMessageType.inbound,
@@ -172,6 +270,16 @@ async def inbound_message(
         cast(str, phone_number.organization_id),
         db,
     )
+    await db.commit()
+
+    background_tasks.add_task(
+        _handle_workflow_inbound_message,
+        from_phone_number,
+        to_number,
+        text_message_id,
+        organization_id,
+    )
+
     return Response(status_code=204)
 
 
@@ -271,23 +379,16 @@ async def outbound_call(
         )
 
     phone_call_id = uuid4()
-    call = twilio_client.calls.create(
-        to=request.phone_number,
-        from_=from_phone_number,
-        twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/call-stream/{phone_call_id}" /></Connect></Response>',
-        status_callback=f"https://{settings.host}/api/v1/phone/webhook/call-status/{phone_call_id}",
-        status_callback_event=[
-            "initiated",
-            "ringing",
-            "answered",
-            "completed",
-        ],
+    call_sid = create_call(
+        to_phone_number=request.phone_number,
+        from_phone_number=from_phone_number,
+        phone_call_id=phone_call_id,
     )
 
     await insert_phone_call(
         phone_call_id,
         user.email,
-        cast(str, call.sid),
+        call_sid,
         request.user_info,
         from_phone_number,
         request.phone_number,

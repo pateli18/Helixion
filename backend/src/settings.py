@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     auth_webhook_signing_secret: str
     host: str = "localhost:8000"
     sentry_dsn: Optional[str] = None
+    temporal_host: str
+    temporal_api_key: Optional[str] = None
+    temporal_namespace: Optional[str] = None
 
     @property
     def postgres_connection_string(self) -> str:

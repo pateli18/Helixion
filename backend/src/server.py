@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -9,6 +10,7 @@ from src.audio.sounds import initialize_sounds_cache
 from src.db.base import db_setup, shutdown_session
 from src.routes import agent, analytics, browser, knowledge_base, phone, user
 from src.settings import settings, setup_logging
+from src.worker.worker import start_worker
 
 setup_logging()
 
@@ -24,6 +26,7 @@ if settings.sentry_dsn is not None:
 async def lifespan(app: FastAPI):
     await db_setup()
     await initialize_sounds_cache()
+    asyncio.create_task(start_worker())
     yield
     await shutdown_session()
 

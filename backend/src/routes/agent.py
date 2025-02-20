@@ -21,8 +21,8 @@ from src.db.api import (
     get_all_phone_numbers,
     get_analytics_report,
     get_available_phone_numbers,
-    get_phone_number_sid_map,
     insert_agent,
+    insert_agent_workflow,
     insert_phone_number,
     make_agent_active,
     update_agent_tool_configuration,
@@ -42,7 +42,9 @@ from src.twilio_utils import (
     available_phone_numbers,
     buy_phone_number,
     update_call_webhook_url,
+    update_message_webhook_url,
 )
+from src.worker.worker_client.worker_client import QUEUE_NAME, execute_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +341,16 @@ async def buy_number(
         incoming=cast(bool, agent_phone_number_model.incoming),
         agent=None,
     )
+
+    update_call_webhook_url(
+        phone_number_sid,
+        f"https://{settings.host}/api/v1/phone/inbound-call/{agent_phone_number_model.id}",
+    )
+
+    update_message_webhook_url(
+        phone_number_sid,
+        f"https://{settings.host}/api/v1/phone/inbound-message/{agent_phone_number_model.id}",
+    )
     await db.commit()
     return output
 
@@ -397,39 +409,105 @@ async def assign_multiple_phone_numbers(
             for phone_number in request.phone_numbers
         ]
     )
-    phone_number_sid_map = await get_phone_number_sid_map(
-        cast(str, user.active_org_id),
-        db,
-    )
-
     unassigned_phone_numbers = (
         existing_phone_numbers_assigned - updated_phone_numbers
     )
     for phone_number_id in unassigned_phone_numbers:
-        phone_number_sid = phone_number_sid_map[phone_number_id]
         await assign_phone_number_to_agent(
             phone_number_id,
             None,
             False,
             db,
         )
-        update_call_webhook_url(
-            phone_number_sid,
-            "",
-        )
 
     for phone_number in request.phone_numbers:
-        phone_number_sid = phone_number_sid_map[phone_number.id]
         await assign_phone_number_to_agent(
             phone_number.id,
             request.agent_base_id,
             phone_number.incoming,
             db,
         )
-        update_call_webhook_url(
-            phone_number_sid,
-            f"https://{settings.host}/api/v1/phone/webhook/call-status/{phone_number.id}",
-        )
 
     await db.commit()
+    return Response(status_code=204)
+
+
+class StartWorkflowRequest(BaseModel):
+    config: dict
+    input_data: dict
+    to_phone_number: str
+
+
+# @router.post(
+#     "/start-workflow",
+#     status_code=204,
+# )
+# async def start_workflow(
+#     request: StartWorkflowRequest,
+#     user: User = Depends(require_user),
+#     db: async_scoped_session = Depends(get_session),
+# ):
+#     organization_id = cast(str, user.active_org_id)
+#     agent_workflow_id = await insert_agent_workflow(
+#         request.config,
+#         request.input_data,
+#         request.to_phone_number,
+#         organization_id,
+#         db,
+#     )
+#     await db.commit()
+#     await execute_workflow(
+#         "AgentWorkflow",
+#         {
+#             "id": agent_workflow_id,
+#             "organization_id": organization_id,
+#         },
+#         QUEUE_NAME,
+#         workflow_id=str(agent_workflow_id),
+#     )
+#     return Response(status_code=204)
+
+
+@router.get(
+    "/start-workflow",
+    status_code=204,
+)
+async def start_workflow(
+    db: async_scoped_session = Depends(get_session),
+):
+    organization_id = "c0887802-2b2d-4c93-8cfd-78af3b08f95c"
+    test_config = {
+        "config": {
+            "config_blocks": [
+                {
+                    "type": "text_message",
+                    "phone_number": "+13617334739",
+                    "message_template": "Hi {name} this is CliniContact. Thanks for signing up for the Focal Epilepsy study. Please confirm your phone number and your interest in the study by responding YES to this text message. If you are no longer interested in the study, please respond NO.",
+                },
+                {
+                    "type": "wait",
+                    "seconds": 60 * 60,
+                },
+            ]
+        },
+        "input_data": {"name": "John Doe"},
+        "to_phone_number": "+13612326374",
+    }
+    agent_workflow_id = await insert_agent_workflow(
+        test_config["config"],
+        test_config["input_data"],
+        test_config["to_phone_number"],
+        organization_id,
+        db,
+    )
+    await db.commit()
+    await execute_workflow(
+        "AgentWorkflow",
+        {
+            "id": agent_workflow_id,
+            "organization_id": organization_id,
+        },
+        QUEUE_NAME,
+        workflow_id=str(agent_workflow_id),
+    )
     return Response(status_code=204)
