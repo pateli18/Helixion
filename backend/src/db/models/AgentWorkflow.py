@@ -39,17 +39,42 @@ class AgentWorkflowModel(Base, TimestampMixin):
         primary_key=True,
         server_default=text("uuid_generate_v4()"),
     )
-    config = Column(JSONB, nullable=False)
+    config_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_workflow_config.id"),
+        nullable=False,
+    )
     input_data = Column(JSONB, nullable=False)
     to_phone_number = Column(VARCHAR, nullable=False)
     status = Column(VARCHAR, nullable=False)
+
+    config = relationship(
+        "AgentWorkflowConfigModel",
+        back_populates="agent_workflows",
+    )
+
+    events = relationship(
+        "AgentWorkflowEventModel",
+        back_populates="agent_workflow",
+    )
+
+
+class AgentWorkflowConfigModel(Base, TimestampMixin):
+    __tablename__ = "agent_workflow_config"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("uuid_generate_v4()"),
+    )
+    config = Column(JSONB, nullable=False)
     organization_id = Column(
         VARCHAR,
         ForeignKey("organization.id"),
         nullable=False,
     )
 
-    events = relationship(
-        "AgentWorkflowEventModel",
-        back_populates="agent_workflow",
+    agent_workflows = relationship(
+        "AgentWorkflowModel",
+        back_populates="config",
     )

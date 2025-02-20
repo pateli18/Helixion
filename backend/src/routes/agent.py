@@ -16,6 +16,7 @@ from src.db.api import (
     assign_phone_number_to_agent,
     get_active_agent,
     get_agent,
+    get_agent_workflow_config,
     get_agents,
     get_agents_metadata,
     get_all_phone_numbers,
@@ -433,7 +434,7 @@ async def assign_multiple_phone_numbers(
 
 
 class StartWorkflowRequest(BaseModel):
-    config: dict
+    config_id: SerializedUUID
     input_data: dict
     to_phone_number: str
 
@@ -447,9 +448,21 @@ async def start_workflow(
     user: User = Depends(require_user),
     db: async_scoped_session = Depends(get_session),
 ):
+    agent_workflow_config = await get_agent_workflow_config(
+        request.config_id,
+        db,
+    )
+    if agent_workflow_config is None:
+        raise HTTPException(
+            status_code=404, detail="Workflow config not found"
+        )
     organization_id = cast(str, user.active_org_id)
+    if cast(str, agent_workflow_config.organization_id) != organization_id:
+        raise HTTPException(
+            status_code=403, detail="You do not have access to this workflow"
+        )
     agent_workflow_id = await insert_agent_workflow(
-        request.config,
+        cast(dict, agent_workflow_config.config),
         request.input_data,
         request.to_phone_number,
         organization_id,

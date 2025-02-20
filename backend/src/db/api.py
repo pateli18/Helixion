@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from src.db.models import (
     AgentModel,
     AgentPhoneNumberModel,
+    AgentWorkflowConfigModel,
     AgentWorkflowEventModel,
     AgentWorkflowModel,
     AnalyticsReportModel,
@@ -671,3 +672,15 @@ async def insert_agent_workflow(
         )
     )
     return result.scalar_one()
+
+
+async def get_agent_workflow_config(
+    agent_workflow_id: SerializedUUID,
+    db: async_scoped_session,
+) -> Optional[AgentWorkflowConfigModel]:
+    result = await db.execute(
+        select(AgentWorkflowConfigModel).where(
+            AgentWorkflowConfigModel.agent_workflow_id == agent_workflow_id
+        )
+    )
+    return result.scalar_one_or_none()
