@@ -241,6 +241,14 @@ class TextMessageType(str, Enum):
     outbound = "outbound"
 
 
+class TextMessage(BaseModel):
+    id: SerializedUUID
+    from_phone_number: str
+    to_phone_number: str
+    body: str
+    message_type: TextMessageType
+
+
 class PhoneCallEndReason(str, Enum):
     end_of_call_bot = "end_of_call_bot"
     voice_mail_bot = "voice_mail_bot"
@@ -351,3 +359,20 @@ class AnalyticsGroup(BaseModel):
 class TransferCallNumber(BaseModel):
     phone_number: str
     label: str
+
+
+class AgentWorkflowEventType(str, Enum):
+    outbound_text_message = "outbound_text_message"
+    inbound_text_message = "inbound_text_message"
+    outbound_phone_call = "outbound_phone_call"
+    wait = "wait"
+
+
+class AgentWorkflowInput(BaseModel):
+    id: SerializedUUID
+    organization_id: str
+
+
+class AgentWorkflowStatus(str, Enum):
+    pending = "pending"
+    completed = "completed"

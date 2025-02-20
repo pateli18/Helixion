@@ -8,6 +8,8 @@ from sqlalchemy.orm import joinedload, selectinload
 from src.db.models import (
     AgentModel,
     AgentPhoneNumberModel,
+    AgentWorkflowEventModel,
+    AgentWorkflowModel,
     AnalyticsReportModel,
     AnalyticsTagGroupModel,
     DocumentModel,
@@ -23,6 +25,8 @@ from src.db.models import (
 from src.helixion_types import (
     AgentBase,
     AgentMetadata,
+    AgentWorkflowEventType,
+    AgentWorkflowStatus,
     PhoneCallEndReason,
     PhoneCallType,
     SerializedUUID,
@@ -320,7 +324,7 @@ async def insert_text_message_event(
 
 
 async def insert_text_message(
-    agent_id: SerializedUUID,
+    agent_id: Optional[SerializedUUID],
     from_phone_number: str,
     to_phone_number: str,
     body: str,
@@ -329,9 +333,11 @@ async def insert_text_message(
     initiator: Optional[str],
     organization_id: str,
     db: async_scoped_session,
-) -> None:
-    await db.execute(
-        insert(TextMessageModel).values(
+) -> SerializedUUID:
+    result = await db.execute(
+        insert(TextMessageModel)
+        .returning(TextMessageModel.id)
+        .values(
             agent_id=agent_id,
             from_phone_number=from_phone_number,
             to_phone_number=to_phone_number,
@@ -342,6 +348,7 @@ async def insert_text_message(
             organization_id=organization_id,
         )
     )
+    return result.scalar_one()
 
 
 async def get_knowledge_base(
@@ -464,6 +471,7 @@ async def insert_phone_number(
             phone_number=phone_number,
             phone_number_sid=phone_number_sid,
             organization_id=organization_id,
+            incoming=False,
         )
     )
     return result.scalar_one()
@@ -559,3 +567,107 @@ async def get_phone_number_sid_map(
         phone_number_id: phone_number_sid
         for phone_number_sid, phone_number_id in result
     }
+
+
+async def get_agent_workflow(
+    agent_workflow_id: SerializedUUID,
+    db: async_scoped_session,
+) -> Optional[AgentWorkflowModel]:
+    result = await db.execute(
+        select(AgentWorkflowModel).where(
+            AgentWorkflowModel.id == agent_workflow_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def insert_agent_workflow_event(
+    agent_workflow_id: SerializedUUID,
+    event_type: AgentWorkflowEventType,
+    event_link_id: Optional[SerializedUUID],
+    metadata: dict,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        insert(AgentWorkflowEventModel).values(
+            agent_workflow_id=agent_workflow_id,
+            event_type=event_type,
+            event_link_id=event_link_id,
+            metadata_=metadata,
+        )
+    )
+
+
+async def update_agent_workflow_status(
+    agent_workflow_id: SerializedUUID,
+    status: AgentWorkflowStatus,
+    db: async_scoped_session,
+) -> None:
+    await db.execute(
+        update(AgentWorkflowModel)
+        .where(AgentWorkflowModel.id == agent_workflow_id)
+        .values(status=status.value)
+    )
+
+
+async def get_agent_workflow_by_phone_number(
+    phone_number: str,
+    organization_id: str,
+    db: async_scoped_session,
+) -> Optional[AgentWorkflowModel]:
+    result = await db.execute(
+        select(AgentWorkflowModel)
+        .where(AgentWorkflowModel.to_phone_number == phone_number)
+        .where(AgentWorkflowModel.organization_id == organization_id)
+        .order_by(AgentWorkflowModel.created_at.desc())
+    )
+
+    latest_workflow = result.scalars().first()
+    return latest_workflow
+
+
+async def get_text_messages_from_workflow(
+    workflow_id: SerializedUUID,
+    db: async_scoped_session,
+) -> list[TextMessageModel]:
+    event_link_ids_raw = await db.execute(
+        select(AgentWorkflowEventModel.event_link_id)
+        .where(AgentWorkflowEventModel.agent_workflow_id == workflow_id)
+        .where(
+            or_(
+                AgentWorkflowEventModel.event_type
+                == AgentWorkflowEventType.inbound_text_message.value,
+                AgentWorkflowEventModel.event_type
+                == AgentWorkflowEventType.outbound_text_message.value,
+            )
+        )
+    )
+    event_link_ids = [event_link_id for event_link_id, in event_link_ids_raw]
+
+    result = await db.execute(
+        select(TextMessageModel)
+        .where(TextMessageModel.id.in_(event_link_ids))
+        .order_by(TextMessageModel.created_at.asc())
+    )
+    return list(result.scalars())
+
+
+async def insert_agent_workflow(
+    config: dict,
+    input_data: dict,
+    to_phone_number: str,
+    organization_id: str,
+    db: async_scoped_session,
+) -> SerializedUUID:
+    result = await db.execute(
+        insert(AgentWorkflowModel)
+        .returning(AgentWorkflowModel.id)
+        .values(
+            config=config,
+            input_data=input_data,
+            to_phone_number=to_phone_number,
+            organization_id=organization_id,
+            status=AgentWorkflowStatus.pending.value,
+        )
+    )
+    return result.scalar_one()

@@ -14,6 +14,7 @@ python-multipart
 sentry-sdk[fastapi]
 sqlalchemy[asyncio]
 svix
+temporalio
 twilio
 uvicorn
 websockets

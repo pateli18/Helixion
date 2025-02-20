@@ -11,7 +11,7 @@ from src.helixion_types import (
 async def generate_updated_instructions_from_report(
     instructions: str, report: str
 ) -> str:
-    system_prompt = f"""
+    system_prompt = """
 - You are given a `report` of an analysis of previous calls and `instructions` for an AI call agent
 - Your task is to update the `instructions` based on the `report`
 - Do not remove instructions unless they directly contradict the report

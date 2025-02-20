@@ -1,4 +1,5 @@
 from .Agent import AgentModel, AgentPhoneNumberModel
+from .AgentWorkflow import AgentWorkflowEventModel, AgentWorkflowModel
 from .Analytics import (
     AnalyticsReportModel,
     AnalyticsTagGroupModel,
@@ -28,4 +29,6 @@ __all__ = [
     "DocumentModel",
     "KnowledgeBaseDocumentAssociationModel",
     "KnowledgeBaseModel",
+    "AgentWorkflowEventModel",
+    "AgentWorkflowModel",
 ]

@@ -35,6 +35,7 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 const NewNumberDialog = (props: {
   setPhoneNumbers: React.Dispatch<React.SetStateAction<AgentPhoneNumber[]>>;
 }) => {
+  const [open, setOpen] = useState(false);
   const [areaCode, setAreaCode] = useState("");
   const [availableNumbers, setAvailableNumbers] = useState<string[]>([]);
   const [selectedPhoneNumber, setSelectedPhoneNumber] = useState<string | null>(
@@ -63,20 +64,22 @@ const NewNumberDialog = (props: {
     }
     setBuyNumberLoading(true);
     const result = await buyPhoneNumber(selectedPhoneNumber, null);
+    setBuyNumberLoading(false);
     if (result !== null) {
       props.setPhoneNumbers((prev) => [...prev, result]);
       setAvailableNumbers(
         availableNumbers.filter((n) => n !== selectedPhoneNumber)
       );
       setSelectedPhoneNumber(null);
+      setOpen(false);
+      toast.success("Number bought successfully");
     } else {
       toast.error("Failed to buy number");
     }
-    setBuyNumberLoading(false);
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>
           <PlusIcon className="w-4 h-4" /> New Number

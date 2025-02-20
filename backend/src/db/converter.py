@@ -8,6 +8,7 @@ from src.db.models import (
     AnalyticsTagGroupModel,
     KnowledgeBaseModel,
     PhoneCallModel,
+    TextMessageModel,
 )
 from src.helixion_types import (
     Agent,
@@ -23,6 +24,8 @@ from src.helixion_types import (
     PhoneCallStatus,
     PhoneCallType,
     SerializedUUID,
+    TextMessage,
+    TextMessageType,
 )
 
 
@@ -151,4 +154,14 @@ def convert_knowledge_base_model(
             DocumentMetadata.model_validate(document.document)
             for document in knowledge_base.documents
         ],
+    )
+
+
+def convert_text_message_model(text_message: TextMessageModel) -> TextMessage:
+    return TextMessage(
+        id=cast(SerializedUUID, text_message.id),
+        from_phone_number=cast(str, text_message.from_phone_number),
+        to_phone_number=cast(str, text_message.to_phone_number),
+        body=cast(str, text_message.body),
+        message_type=cast(TextMessageType, text_message.message_type),
     )

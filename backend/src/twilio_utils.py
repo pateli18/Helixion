@@ -3,6 +3,7 @@ from typing import Optional
 from twilio.request_validator import RequestValidator
 from twilio.rest import Client
 
+from src.helixion_types import SerializedUUID
 from src.settings import settings
 
 twilio_client = Client(
@@ -34,13 +35,15 @@ def send_text_message(
     body: str,
     from_phone_number: str,
     status_callback: str,
-) -> Optional[str]:
+) -> str:
     response = twilio_client.messages.create(
         from_=from_phone_number,
         body=body,
         to=to_phone_number,
         status_callback=status_callback,
     )
+    if response.sid is None:
+        return "no-sid"
     return response.sid
 
 
@@ -59,7 +62,7 @@ def available_phone_numbers(country_code: str, area_code: int) -> list[str]:
 
 def buy_phone_number(phone_number: str) -> Optional[str]:
     response = twilio_client.incoming_phone_numbers.create(
-        phone_number=phone_number
+        phone_number=phone_number,
     )
     return response.sid
 
@@ -67,10 +70,34 @@ def buy_phone_number(phone_number: str) -> Optional[str]:
 def update_call_webhook_url(phone_number_sid: str, webhook_url: str):
     twilio_client.incoming_phone_numbers(phone_number_sid).update(
         voice_url=webhook_url,
+        voice_method="POST",
     )
 
 
 def update_message_webhook_url(phone_number_sid: str, webhook_url: str):
     twilio_client.incoming_phone_numbers(phone_number_sid).update(
         sms_url=webhook_url,
+        sms_method="POST",
     )
+
+
+def create_call(
+    to_phone_number: str,
+    from_phone_number: str,
+    phone_call_id: SerializedUUID,
+) -> str:
+    call = twilio_client.calls.create(
+        to=to_phone_number,
+        from_=from_phone_number,
+        twiml=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="wss://{settings.host}/api/v1/phone/call-stream/{phone_call_id}" /></Connect></Response>',
+        status_callback=f"https://{settings.host}/api/v1/phone/webhook/call-status/{phone_call_id}",
+        status_callback_event=[
+            "initiated",
+            "ringing",
+            "answered",
+            "completed",
+        ],
+    )
+    if call.sid is None:
+        return "no-sid"
+    return call.sid

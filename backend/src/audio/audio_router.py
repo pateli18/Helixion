@@ -120,21 +120,20 @@ class CallRouter:
             receiving_phone_number,
             body,
             sending_phone_number,
-            f"https://{settings.host}/api/v1/phone/webhook/message-status/{message_id}",
+            f"https://{settings.host}/api/v1/phone/webhook/text-message-status/{message_id}",
         )
-        if output_sid is not None:
-            async with async_session_scope() as db:
-                await insert_text_message(
-                    self.agent_id,
-                    sending_phone_number,
-                    receiving_phone_number,
-                    body,
-                    TextMessageType.outbound,
-                    output_sid,
-                    str(self.ai_caller.phone_call_id),
-                    self.organization_id,
-                    db,
-                )
+        async with async_session_scope() as db:
+            await insert_text_message(
+                self.agent_id,
+                sending_phone_number,
+                receiving_phone_number,
+                body,
+                TextMessageType.outbound,
+                output_sid,
+                str(self.ai_caller.phone_call_id),
+                self.organization_id,
+                db,
+            )
 
     async def _transfer_call(self, phone_number_label: str) -> None:
         transfer_call_number: Optional[str] = next(
