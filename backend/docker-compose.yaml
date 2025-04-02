@@ -45,5 +45,5 @@ services:
     env_file: ../.env
     environment:
       POSTGRES_URI: postgres://clinicontact:clinicontact@postgres:5432/clinicontact
-      AWS_PROFILE: clinicontact
-      HOST: "0eb5-107-222-191-66.ngrok-free.app"
+      AWS_PROFILE: helixion
+      HOST: "bf29-2601-640-8b00-4d30-399e-d40b-5e0-977a.ngrok-free.app"
