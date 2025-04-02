@@ -395,6 +395,7 @@ async def insert_document(
     size: int,
     storage_path: str,
     organization_id: str,
+    token_count: int,
     db: async_scoped_session,
 ) -> DocumentModel:
     result = await db.execute(
@@ -407,6 +408,7 @@ async def insert_document(
             size=size,
             storage_path=storage_path,
             organization_id=organization_id,
+            token_count=token_count,
         )
     )
     return result.scalar_one()

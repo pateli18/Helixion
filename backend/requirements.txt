@@ -15,6 +15,7 @@ sentry-sdk[fastapi]
 sqlalchemy[asyncio]
 svix
 temporalio
+tiktoken
 twilio
 uvicorn
 websockets

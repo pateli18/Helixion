@@ -18,6 +18,7 @@ class DocumentModel(Base, TimestampMixin):
     text = Column(VARCHAR, nullable=False)
     mime_type = Column(VARCHAR, nullable=False)
     size = Column(Integer, nullable=False)
+    token_count = Column(Integer, nullable=False)
     storage_path = Column(VARCHAR, nullable=False)
     organization_id = Column(
         VARCHAR, ForeignKey("organization.id"), nullable=False

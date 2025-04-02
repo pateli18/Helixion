@@ -5,6 +5,7 @@ from typing import cast
 
 import docx2txt
 import pymupdf
+import tiktoken
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_scoped_session
@@ -23,6 +24,8 @@ from src.db.converter import convert_knowledge_base_model
 from src.helixion_types import DocumentMetadata, KnowledgeBase, SerializedUUID
 
 logger = logging.getLogger(__name__)
+
+encoding = tiktoken.encoding_for_model("gpt-4o")
 
 router = APIRouter(
     prefix="/knowledge-base",
@@ -92,6 +95,7 @@ async def upload_documents(
             logger.warning(f"Cannot process file type {mime_type}")
             text = ""
 
+        token_count = len(encoding.encode(text))
         document_model = await insert_document(
             name=filename,
             text=text,
@@ -99,6 +103,7 @@ async def upload_documents(
             size=len(data),
             storage_path=_doc_save_path(str(user.active_org_id), filename),
             organization_id=str(user.active_org_id),
+            token_count=token_count,
             db=db,
         )
         await insert_document_knowledge_base_association(
