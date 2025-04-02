@@ -78,6 +78,8 @@ services:
         sync: false
       - key: SENTRY_AUTH_TOKEN
         sync: false
+      - key: VITE_AUTH_URL
+        value: "https://auth.helixion.ai"
     headers:
       - path: "/*"
         name: "Strict-Transport-Security"
