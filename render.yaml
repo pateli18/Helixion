@@ -3,7 +3,7 @@ services:
     name: helixion-backend
     plan: starter
     runtime: python
-    repo: https://github.com/pateli18/clinicontact
+    repo: https://github.com/pateli18/Helixion
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn src.server:app --host 0.0.0.0 --port 8000"
     rootDir: backend
@@ -12,6 +12,10 @@ services:
         - backend/**
     healthCheckPath: /healthz
     envVars:
+      - key: POSTGRES_URI
+        fromDatabase:
+          name: helixion-db
+          property: connectionString
       - key: WEB_CONCURRENCY
         value: 1
       - key: LOG_LEVEL
@@ -26,10 +30,35 @@ services:
         sync: false
       - key: AWS_DEFAULT_REGION
         sync: false
+      - key: TWILIO_USERNAME
+        sync: false
+      - key: TWILIO_PASSWORD
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: AUTH_URL
+        sync: false
+      - key: AUTH_API_KEY
+        sync: false
+      - key: HOST
+        value: "api.helixion.ai"
+      - key: AUTH_WEBHOOK_SIGNING_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: TEMPORAL_HOST
+        sync: false
+      - key: TEMPORAL_API_KEY
+        sync: false
+      - key: TEMPORAL_NAMESPACE
+        sync: false
+
   - type: web
     name: helixion-frontend
     runtime: static
-    repo: https://github.com/pateli18/clinicontact
+    repo: https://github.com/pateli18/Helixion
     rootDir: frontend
     buildCommand: npm ci --no-audit; npm run build
     buildFilter:
@@ -65,3 +94,8 @@ services:
       - path: "/*"
         name: "Content-Security-Policy"
         value: "default-src 'self'; connect-src 'self' blob: wss://*.helixion.ai https://*.helixion.ai *.sentry.io api.openai.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; worker-src 'self' blob:; media-src 'self' data: blob: *.helixion.ai; img-src * data: blob:; font-src 'self' https://fonts.gstatic.com;"
+
+databases:
+  - name: helixion-db
+    postgresMajorVersion: "15"
+    plan: free
