@@ -468,7 +468,7 @@ class AiCaller(AsyncContextManager["AiCaller"]):
         elif response["type"] == "response.done":
             if response["response"]["status"] == "failed":
                 logger.exception(
-                    f"OpenAI response failed with status: {response['response']['status']}"
+                    f"OpenAI response failed with status: {response['response']['status_details']['error']}"
                 )
         elif response["type"] == "error":
             logger.exception(f"OpenAI error: {response['error']}")
