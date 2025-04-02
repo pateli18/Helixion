@@ -1,7 +1,7 @@
 services:
   - type: web
     name: helixion-backend
-    plan: starter
+    plan: standard
     runtime: python
     repo: https://github.com/pateli18/Helixion
     buildCommand: "pip install -r requirements.txt"
