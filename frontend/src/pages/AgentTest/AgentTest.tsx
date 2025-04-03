@@ -248,7 +248,16 @@ const Dialer = (props: {
         </>
       )}
       {phoneCallId === null && (
-        <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+        <>
+          {props.activeAgent.phone_numbers.length > 0 ? (
+            <CallPhoneNumber handleCallPhoneNumber={handleCallPhoneNumber} />
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              No phone numbers assigned to this agent. Please add a phone number
+              from the Actions menu.
+            </div>
+          )}
+        </>
       )}
       <LiveCallDisplay
         phoneCallId={phoneCallId}
