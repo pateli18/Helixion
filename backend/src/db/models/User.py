@@ -12,7 +12,7 @@ class UserModel(Base, TimestampMixin):
         primary_key=True,
     )
     email = Column(VARCHAR, nullable=False)
-    organization_id = Column(VARCHAR, nullable=False)
+    organization_id = Column(VARCHAR, nullable=True)
 
 
 class OrganizationModel(Base, TimestampMixin):
